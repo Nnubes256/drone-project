@@ -1,0 +1,11 @@
+[package]
+name = "rf24-sys"
+version = "0.1.0"
+authors = ["Ignacio Gutiérrez (Nnubes256)"]
+edition = "2018"
+
+[dependencies]
+
+
+[build-dependencies]
+bindgen = "0.51.1"
