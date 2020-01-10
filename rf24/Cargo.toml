@@ -1,0 +1,10 @@
+[package]
+name = "rf24"
+version = "0.1.0"
+authors = ["Ignacio Gutiérrez (Nnubes256)"]
+edition = "2018"
+
+[dependencies]
+rf24-sys = { path = "../rf24-sys" }
+err-derive = "0.2"
+num_enum = "0.4"
