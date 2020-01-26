@@ -1,0 +1,13 @@
+[package]
+name = "icaros"
+version = "0.1.0"
+authors = ["Ignacio <nnubes256@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+bincode2 = "2.0"
+snafu = "0.4"
+
+[target.armv7-unknown-linux-gnueabihf.dependencies]
+rf24 = { path = "../rf24" }
