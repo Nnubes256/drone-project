@@ -16,6 +16,10 @@ Transmission should be doable; used data speed < usable data speed.
 
 Packet latency would be slightly less than 20ms. Less latency is useless anyway due to the PWM frequency the motors are driven at (50 Hz); slightly less may be good though, in order to counter kernel-bound latency.
 
+## Requirements
+
+- Little-endian
+
 ## Protocols
 
 ### Arduino --> RPi, v0.3
@@ -27,24 +31,24 @@ Packet latency would be slightly less than 20ms. Less latency is useless anyway 
   - Range taken by the PCA9685 servo controller has 12 bits of resolution.
 - Orientation quartenion: ~~8~~ 4 bytes (~~`double`~~ `float` or less) * 4 axis = ~~32~~ 16 bytes (see optimization)
   - Optimization 1 (TO BE CONFIRMED): from observed screenshots from Adafruit, precision is actually
-  so **low** that all decimal parts are always one of:
+  so **low** that **from the second digit of each decimal** all decimal parts are always one of:
   `0, 125, 250, 375, 500, 625, 750, 875`.
   Not only this fits into a `float` even though the exposed type is a `double`, but we could also encode the
   whole number into a single `uint16_t` where the number occupies the least-significant 9 bits, then the decimal is
   encoded in the next 3 bits (decimal has only 8 = 2^3 possible values! We can encode each of those values in 3 bits).
-  - Optimization 2?: If we really need to overdo it, from Optimization 1 we can follow exactly the same optimization as with the
-  motor speed: the entire number is now encoded in 12 bits, and thus we can bitpack the entire quartenion into 12 * 4 = 48 bits
+  - Optimization 2?: If we really need to overdo it, from Optimization 1: the entire number is now encoded in 12 bits,
+  and thus we can bitpack the entire quartenion into 12 * 4 = 48 bits
   = 6 bytes!
 - Accelerometer XYZ: 4 bytes (`float`) * 3 axes = 12 bytes
 - Padding: 25 bytes
 
 = 64 bytes
 
-### RPi --> Arduino, v0.1
+### RPi --> Arduino, v0.2
 
 - Header byte: 1 byte
 - Desired roll/pitch/yaw/throttle: 2 bytes (uint16_t) * 4 axes = 16 bytes
-- PID constant values: 4 bytes (float) * 3 values = 12 bytes
-- Padding: 35 bytes
+- PID constant values: 4 bytes (float) * 3 values * 3 axis = 36 bytes
+- Padding: 12 bytes
 
 = 64 bytes
