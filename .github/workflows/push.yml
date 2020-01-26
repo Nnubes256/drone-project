@@ -19,14 +19,15 @@ jobs:
       with:
         path: ~/.cargo/git
         key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }} 
-    - run: cd icaros
     - name: Cache cargo build for icaros
       uses: actions/cache@v1
       with:
-        path: target
+        path: icaros/target
         key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
     - name: Build icaros
       run: cargo build --verbose
+      working-directory: icaros
     - name: Run icaros tests
       run: cargo test --verbose
+      working-directory: icaros
 
