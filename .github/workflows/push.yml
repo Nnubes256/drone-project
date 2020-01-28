@@ -1,4 +1,4 @@
-name: Rust
+name: Project Continuous Integration
 
 on: [push]
 
@@ -18,7 +18,7 @@ jobs:
       uses: actions/cache@v1
       with:
         path: ~/.cargo/git
-        key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }} 
+        key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
     - name: Cache cargo build for icaros
       uses: actions/cache@v1
       with:
@@ -30,4 +30,3 @@ jobs:
     - name: Run icaros tests
       run: cargo test --verbose
       working-directory: icaros
-
