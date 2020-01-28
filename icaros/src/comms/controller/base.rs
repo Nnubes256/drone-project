@@ -37,9 +37,9 @@ pub struct A2RMessage {
 
 #[derive(Serialize, Deserialize)]
 pub struct R2ADesiredRotationAndThrottle {
-    roll: u16,
-    pitch: u16,
-    yaw: u16,
+    roll: i16,
+    pitch: i16,
+    yaw: i16,
     throttle: u16,
 }
 

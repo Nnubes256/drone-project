@@ -44,11 +44,13 @@ Packet latency would be slightly less than 20ms. Less latency is useless anyway 
 
 = 64 bytes
 
-### RPi --> Arduino, v0.2
+### RPi --> Arduino, v0.3
 
 - Header byte: 1 byte
-- Desired roll/pitch/yaw/throttle: 2 bytes (uint16_t) * 4 axes = 16 bytes
+  - Constant value: 0x4F
+- Desired roll/pitch/yaw: 2 bytes (**int16_t**) * 3 axes = 6 bytes
+- Desired throttle: 2 bytes (uint32_t)
 - PID constant values: 4 bytes (float) * 3 values * 3 axis = 36 bytes
-- Padding: 12 bytes
+- Padding: 20 bytes
 
 = 64 bytes
