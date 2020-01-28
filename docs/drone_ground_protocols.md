@@ -6,9 +6,12 @@
 
 ## Protocols
 
+Unless specified, everything is **little-endian**.
+
 ### Ground-to-air
 
 - Header byte: 1 byte
+  - Constant value: 0x7F
 - Counter: 2 bytes
 - Command type + length of command data: 2 byte
     - 0x02: (CNTA) Controller axis state
@@ -22,6 +25,7 @@
 
 ### Air-to-ground
 - Header byte: 1 byte
+  - Constant value: 0x7F
 - Counter: 2 bytes
 - Report type + length of report: 2 bytes
     - 0x02 (MOTR): Motor speed

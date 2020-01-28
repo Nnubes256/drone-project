@@ -18,13 +18,16 @@ Packet latency would be slightly less than 20ms. Less latency is useless anyway 
 
 ## Requirements
 
-- Little-endian
+- **Little-endian**
 
 ## Protocols
+
+Unless specified, everything is **little-endian**.
 
 ### Arduino --> RPi, v0.3
 
 - Header byte: 1 byte
+  - Constant value: 0x4F
 - Counter: 2 bytes (`uint16_t`)
   - Increments on each packet sent; good to measure lost packets and ensure synchronisation.
 - Motor speed: 2 bytes (`uint16_t`) * 4 motors = 8 bytes
