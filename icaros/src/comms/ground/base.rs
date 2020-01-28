@@ -1,4 +1,3 @@
-use crate::comms::common::get_codec;
 use core::convert::TryFrom;
 use core::fmt::Display;
 use serde::Deserialize;
@@ -9,6 +8,13 @@ use crate::comms::common::Acceleration;
 use crate::comms::common::MotorSpeed;
 use crate::comms::common::Orientation;
 use snafu::Snafu;
+
+pub fn get_ground_codec() -> bincode2::Config {
+    let mut config = bincode2::config();
+    config.array_length(bincode2::LengthOption::U8);
+    config.limit(32);
+    config
+}
 
 #[derive(Debug, Snafu)]
 pub enum ReceiveError<T>
@@ -146,7 +152,7 @@ macro_rules! command_type {
             fn try_from(internal: CommandTypeInternal) -> Result<Self, <Self as TryFrom<CommandTypeInternal>>::Error> {
                 match internal.command_type {
                     $(
-                        $commandid => Ok($cmdtypeenum::$commandname(get_codec().deserialize(&internal.data)?)),
+                        $commandid => Ok($cmdtypeenum::$commandname(get_ground_codec().deserialize(&internal.data)?)),
                     )*
                     _ => Err(Box::new(bincode2::ErrorKind::Custom(format!("Unknown {}: {}", type_name::<$cmdtypeenum>(), internal.command_type))))
                 }
@@ -160,7 +166,7 @@ macro_rules! command_type {
                     data: match self {
                         $(
                             $cmdtypeenum::$commandname(data) => {
-                                get_codec().serialize(&data).unwrap_or(Vec::new())
+                                get_ground_codec().serialize(&data).unwrap_or(Vec::new())
                             },
                         )*
                     }

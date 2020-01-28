@@ -3,10 +3,10 @@ use serde::Serialize;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Quartenion {
-    w: f32,
-    x: f32,
-    y: f32,
-    z: f32,
+    pub w: f32,
+    pub x: f32,
+    pub y: f32,
+    pub z: f32,
 }
 
 impl Quartenion {

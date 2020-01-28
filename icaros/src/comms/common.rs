@@ -4,13 +4,6 @@ use serde::Serialize;
 use crate::utils::quartenion::Quartenion;
 use crate::utils::vector::Point3;
 
-pub fn get_codec() -> bincode2::Config {
-    let mut config = bincode2::config();
-    config.array_length(bincode2::LengthOption::U8);
-    config.limit(32);
-    config
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MotorSpeed {
     tl: u16,
@@ -39,6 +32,10 @@ impl Acceleration {
     pub fn from_vec3(v: Point3<f32>) -> Self {
         Acceleration { vector: v }
     }
+
+    pub fn as_point3(&self) -> &Point3<f32> {
+        &self.vector
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -50,6 +47,10 @@ impl Orientation {
     pub fn from_quartenion(q: Quartenion) -> Self {
         Orientation { orientation: q }
     }
+
+    pub fn as_quartenion(&self) -> &Quartenion {
+        &self.orientation
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -59,9 +60,21 @@ pub struct PIDParameters {
     d: f32,
 }
 
+impl PIDParameters {
+    pub fn new(p: f32, i: f32, d: f32) -> Self {
+        PIDParameters { p, i, d }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PIDAxes {
     roll: PIDParameters,
     pitch: PIDParameters,
     yaw: PIDParameters,
+}
+
+impl PIDAxes {
+    pub fn new(roll: PIDParameters, pitch: PIDParameters, yaw: PIDParameters) -> Self {
+        PIDAxes { roll, pitch, yaw }
+    }
 }

@@ -1,10 +1,10 @@
-use crate::comms::common::get_codec;
 use crate::comms::ground::base::A2GMessage;
 use crate::comms::ground::base::G2ACommandType;
 use crate::comms::ground::base::G2AMessage;
 use crate::comms::ground::base::GroundCommunicationService;
 use crate::comms::ground::base::ReceiveError;
 use crate::comms::ground::base::SendError;
+use crate::comms::ground::base::get_ground_codec;
 use bincode2;
 
 pub struct DummyController {
@@ -20,7 +20,7 @@ impl GroundCommunicationService for DummyController {
         DummyController {
             ground_queue: Vec::new(),
             drone_queue: Vec::new(),
-            codec: get_codec(),
+            codec: get_ground_codec(),
         }
     }
 
@@ -90,7 +90,12 @@ mod tests {
 
         let mut dummy_comms = DummyController::setup(());
 
-        assert_eq!(dummy_comms.send(test_packet).unwrap(), true, "Send failed");
+        println!("I send the structure: {:?}", test_packet);
+
+        match dummy_comms.send(test_packet) {
+            Ok(result) => assert_eq!(result, true),
+            Err(err) => panic!("{}", err)
+        }
 
         let expected: &[u8] = &[
             0x7F, 0x03, 0x00, 0x02, 0x08, 0xe8, 0x03, 0x00, 0x00, 0x00, 0x00, 0xe8, 0x03,
@@ -114,7 +119,12 @@ mod tests {
 
         let mut dummy_comms = DummyController::setup(());
 
-        assert_eq!(dummy_comms.send(test_packet).unwrap(), true);
+        println!("I send the structure: {:?}", test_packet);
+
+        match dummy_comms.send(test_packet) {
+            Ok(result) => assert_eq!(result, true),
+            Err(err) => panic!("{}", err)
+        }
 
         let expected: &[u8] = &[
             0x7F, 0x03, 0x00, 0x03, 0x10, 0x00, 0x00, 0x00, 0x40, 0x00, 0x00, 0x80, 0x40, 0x00,
@@ -139,7 +149,12 @@ mod tests {
 
         let mut dummy_comms = DummyController::setup(());
 
-        assert_eq!(dummy_comms.send(test_packet).unwrap(), true);
+        println!("I send the structure: {:?}", test_packet);
+
+        match dummy_comms.send(test_packet) {
+            Ok(result) => assert_eq!(result, true),
+            Err(err) => panic!("{}", err)
+        }
 
         let expected: &[u8] = &[
             0x7F, 0x03, 0x00, 0x04, 0x0C, 0x00, 0x00, 0x00, 0x40, 0x00, 0x00, 0x80, 0x40, 0x00,
@@ -165,7 +180,12 @@ mod tests {
 
         let mut dummy_comms = DummyController::setup(());
 
-        assert_eq!(dummy_comms.send(test_packet).unwrap(), true);
+        println!("I send the structure: {:?}", test_packet);
+
+        match dummy_comms.send(test_packet) {
+            Ok(result) => assert_eq!(result, true),
+            Err(err) => panic!("{}", err)
+        }
 
         let expected: &[u8] = &[
             0x7F, 0x03, 0x00, 0x10, 0x06, 0x7F, 0x04, 0x00, 0x01, 0x02, 0x03,
@@ -193,7 +213,12 @@ mod tests {
 
         let mut dummy_comms = DummyController::setup(());
 
-        assert_eq!(dummy_comms.send(test_packet).unwrap(), true);
+        println!("I send the structure: {:?}", test_packet);
+
+        match dummy_comms.send(test_packet) {
+            Ok(result) => assert_eq!(result, true),
+            Err(err) => panic!("{}", err)
+        }
 
         let expected: &[u8] = &[
             0x7F, 0x03, 0x00, 0x10, 0x1B, 0x7F, 0x19, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13,
@@ -222,6 +247,8 @@ mod tests {
         };
 
         let mut dummy_comms = DummyController::setup(());
+
+        println!("I attempt to send the structure: {:?}", test_packet);
 
         match dummy_comms.send(test_packet) {
             Ok(res) => assert_eq!(res, true),
