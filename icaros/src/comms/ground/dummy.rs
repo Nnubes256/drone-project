@@ -16,12 +16,12 @@ pub struct DummyController {
 impl GroundCommunicationService for DummyController {
     type GroundCommunicationOptions = ();
     type HardwareDriverError = String;
-    fn setup(_: Self::GroundCommunicationOptions) -> Self {
-        DummyController {
+    fn setup(_: Self::GroundCommunicationOptions) -> Result<Self, String> {
+        Ok(DummyController {
             ground_queue: Vec::new(),
             drone_queue: Vec::new(),
             codec: get_ground_codec(),
-        }
+        })
     }
 
     fn send(&mut self, msg: A2GMessage) -> Result<bool, SendError<Self::HardwareDriverError>> {
@@ -88,7 +88,7 @@ mod tests {
             command: A2GCommandType::MOTR(MotorSpeed::from_speeds((1000, 0, 0, 1000))),
         };
 
-        let mut dummy_comms = DummyController::setup(());
+        let mut dummy_comms = DummyController::setup(()).unwrap();
 
         println!("I send the structure: {:?}", test_packet);
 
@@ -117,7 +117,7 @@ mod tests {
             ))),
         };
 
-        let mut dummy_comms = DummyController::setup(());
+        let mut dummy_comms = DummyController::setup(()).unwrap();
 
         println!("I send the structure: {:?}", test_packet);
 
@@ -147,7 +147,7 @@ mod tests {
             ))),
         };
 
-        let mut dummy_comms = DummyController::setup(());
+        let mut dummy_comms = DummyController::setup(()).unwrap();
 
         println!("I send the structure: {:?}", test_packet);
 
@@ -178,7 +178,7 @@ mod tests {
             )),
         };
 
-        let mut dummy_comms = DummyController::setup(());
+        let mut dummy_comms = DummyController::setup(()).unwrap();
 
         println!("I send the structure: {:?}", test_packet);
 
@@ -211,7 +211,7 @@ mod tests {
             )),
         };
 
-        let mut dummy_comms = DummyController::setup(());
+        let mut dummy_comms = DummyController::setup(()).unwrap();
 
         println!("I send the structure: {:?}", test_packet);
 
@@ -246,7 +246,7 @@ mod tests {
             )),
         };
 
-        let mut dummy_comms = DummyController::setup(());
+        let mut dummy_comms = DummyController::setup(()).unwrap();
 
         println!("I attempt to send the structure: {:?}", test_packet);
 
@@ -259,7 +259,7 @@ mod tests {
     #[test]
     fn g2a_packet_cnta_deserialize() {
         let message = vec![0x7F, 0x03, 0x00, 0x02, 0x04, 0x00, 0x00, 0xCE, 0x32];
-        let mut dummy_comms = DummyController::setup(());
+        let mut dummy_comms = DummyController::setup(()).unwrap();
 
         dummy_comms.send_drone_message_bytes(message.clone());
 
@@ -292,7 +292,7 @@ mod tests {
         let message = vec![
             0x7F, 0x03, 0x00, 0x10, 0x08, 0x7F, 0x06, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06,
         ];
-        let mut dummy_comms = DummyController::setup(());
+        let mut dummy_comms = DummyController::setup(()).unwrap();
 
         dummy_comms.send_drone_message_bytes(message.clone());
 
@@ -329,7 +329,7 @@ mod tests {
     #[test]
     fn g2a_packet_hear_deserialize() {
         let message = vec![0x7F, 0x03, 0x00, 0xFF, 0x04, 0x5B, 0xA2, 0x2D, 0x5E];
-        let mut dummy_comms = DummyController::setup(());
+        let mut dummy_comms = DummyController::setup(()).unwrap();
 
         dummy_comms.send_drone_message_bytes(message.clone());
 

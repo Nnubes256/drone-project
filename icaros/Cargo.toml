@@ -8,6 +8,7 @@ edition = "2018"
 serde = { version = "1.0", features = ["derive"] }
 bincode2 = "2.0"
 snafu = "0.4"
+serialport = "3.3"
 
 [target.armv7-unknown-linux-gnueabihf.dependencies]
 rf24 = { path = "../rf24" }

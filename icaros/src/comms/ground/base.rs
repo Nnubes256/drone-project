@@ -3,6 +3,7 @@ use core::fmt::Display;
 use serde::Deserialize;
 use serde::Serialize;
 use std::any::type_name;
+use std::error::Error;
 
 use crate::comms::common::Acceleration;
 use crate::comms::common::MotorSpeed;
@@ -38,6 +39,14 @@ where
     }
 }
 
+impl<T> ReceiveError<T> where
+    T: Display,
+{
+    pub fn from_driver_error(err: T) -> Self {
+        ReceiveError::DriverRecvError { inner: Box::new(err) }
+    }
+}
+
 #[derive(Debug, Snafu)]
 pub enum SendError<T>
 where
@@ -55,6 +64,14 @@ where
 {
     fn from(value: bincode2::Error) -> Self {
         Self::SerializationError { inner: value }
+    }
+}
+
+impl<T> SendError<T> where
+    T: Display,
+{
+    pub fn from_driver_error(err: T) -> Self {
+        SendError::DriverSendError { inner: Box::new(err) }
     }
 }
 
@@ -205,11 +222,11 @@ pub struct A2GMessage {
     pub command: A2GCommandType,
 }
 
-pub trait GroundCommunicationService {
+pub trait GroundCommunicationService : Sized {
     type GroundCommunicationOptions;
     type HardwareDriverError: Display;
 
-    fn setup(config: Self::GroundCommunicationOptions) -> Self;
+    fn setup(config: Self::GroundCommunicationOptions) -> Result<Self, Self::HardwareDriverError>;
     fn get_max_app_message_size() -> usize;
     fn send(&mut self, msg: A2GMessage) -> Result<bool, SendError<Self::HardwareDriverError>>;
     fn recv_available(&mut self) -> usize;

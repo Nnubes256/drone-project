@@ -17,12 +17,12 @@ impl ControllerCommunicationService for DummyController {
     type ControllerCommunicationOptions = ();
     type HardwareDriverError = String;
 
-    fn setup(_: Self::ControllerCommunicationOptions) -> Self {
-        DummyController {
+    fn setup(_: Self::ControllerCommunicationOptions) -> Result<Self, String> {
+        Ok(DummyController {
             arduino_queue: Vec::new(),
             raspberry_queue: Vec::new(),
             codec: get_controller_codec()
-        }
+        })
     }
 
     fn send(&mut self, msg: R2AMessage) -> Result<bool, ControllerSendError<Self::HardwareDriverError>> {
@@ -38,8 +38,8 @@ impl ControllerCommunicationService for DummyController {
         Ok(true)
     }
 
-    fn recv_available(&mut self) -> usize {
-        self.raspberry_queue.len()
+    fn recv_available(&mut self) -> Result<usize, Self::HardwareDriverError> {
+        Ok(self.raspberry_queue.len())
     }
 
     fn recv(&mut self) -> Result<A2RMessage, ControllerReceiveError<Self::HardwareDriverError>> {
@@ -81,7 +81,7 @@ mod tests {
             )
         };
 
-        let mut dummy_comms = DummyController::setup(());
+        let mut dummy_comms = DummyController::setup(()).unwrap();
 
         match dummy_comms.send(test_packet) {
             Ok(result) => assert_eq!(result, true),
@@ -120,7 +120,7 @@ mod tests {
             0x00, 0x00, 0x00, 0x00 // Acceleration vector: Z = 0
         ];
 
-        let mut dummy_comms = DummyController::setup(());
+        let mut dummy_comms = DummyController::setup(()).unwrap();
 
         dummy_comms.send_self_bytes(message);
 

@@ -11,6 +11,8 @@ use crate::utils::quartenion::Quartenion;
 
 // TODO move StatusData and ControlData outta here
 
+pub const CONTROLLER_HEADER_BYTE: u8 = 0x4F;
+
 pub fn get_controller_codec() -> bincode2::Config {
     let mut config = bincode2::config();
     config.array_length(bincode2::LengthOption::U8);
@@ -26,9 +28,9 @@ pub struct StatusData {
 }
 
 pub struct ControlData {
-    roll: u16,
-    pitch: u16,
-    yaw: u16,
+    roll: i16,
+    pitch: i16,
+    yaw: i16,
     throttle: u16,
     pid_p: f32,
     pid_i: f32,
@@ -107,12 +109,12 @@ pub struct R2AMessage {
     pub pid: PIDAxes,
 }
 
-pub trait ControllerCommunicationService {
+pub trait ControllerCommunicationService : Sized {
     type ControllerCommunicationOptions;
     type HardwareDriverError: Display;
 
-    fn setup(config: Self::ControllerCommunicationOptions) -> Self;
+    fn setup(config: Self::ControllerCommunicationOptions) -> Result<Self, Self::HardwareDriverError>;
     fn send(&mut self, msg: R2AMessage) -> Result<bool, ControllerSendError<Self::HardwareDriverError>>;
-    fn recv_available(&mut self) -> usize;
+    fn recv_available(&mut self) -> Result<usize, Self::HardwareDriverError>;
     fn recv(&mut self) -> Result<A2RMessage, ControllerReceiveError<Self::HardwareDriverError>>;
 }
