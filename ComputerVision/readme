@@ -1,0 +1,3 @@
+For using the model, the input video must be placed into the input folder and modify the code adding the path to the model, input and output 
+folders.
+The analysed video is stored into the output folder.
