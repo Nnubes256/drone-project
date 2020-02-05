@@ -67,6 +67,7 @@ void emergencyLanding();
 short unsigned int setSpeedMotor(int n, int speedM);
 void sendDroneMsg(byte* msg, size_t len);
 bool recvDroneMsg(byte* msg, size_t maxLen);
+void emergencyLanding();
 
 void setup() {
   rpiTX = (byte*) calloc(64, sizeof(byte));  //reserve 64 bytes of memory in the variable to be readed from the serial port
@@ -130,33 +131,14 @@ void setup() {
 }
 
 void loop() {
-  
   //read the information from the raspberry pi
   int8_t header;
   int16_t pitch, roll, yaw, throttle;
   int16_t raspberryThrottle;
 
   bool errorCommunication = false;
-  bool moreThan40Lost = false;
-
-  if(lostPakages > 40)
-  {
-    SetpointYaw = 0;
-    SetpointPitch = 0;
-    SetpointRoll = 0;
-    throttle = throttle * 0.96; //reduce the throttle speed
-    
-    errorCommunication = true;
-  }
-
-  if(lostPakages > 5 && lostPakages <= 40)
-  {
-    SetpointYaw = 0;
-    SetpointPitch = 0;
-    SetpointRoll = 0;
-  }
-  //read the incoming bytes
-  
+ 
+  //read the incoming bytes 
   if (recvDroneMsg(rpiTX, 64)) 
   {
     lostPakages = 0;
@@ -171,9 +153,22 @@ void loop() {
     SetpointYaw = (float)yaw;
     SetpointPitch = (float)pitch;
     SetpointRoll = (float)roll;
+
+    throttle = (float)raspberryThrottle;
   }
   else
     lostPakages++;
+
+  //pakeges lost
+  if(lostPakages > 5)
+  {
+    SetpointYaw = 0;
+    SetpointPitch = 0;
+    SetpointRoll = 0;
+  }
+  if(lostPakages > 40)
+    throttle = throttle * 0.96; //reduce the throttle speed
+
 
   //this function to read the sensors return the values in degrees per second
   imu::Vector<3> euler = bno.getVector(Adafruit_BNO055::VECTOR_EULER);
@@ -187,9 +182,6 @@ void loop() {
   myPIDRoll.Compute();
   myPIDYaw.Compute();
   myPIDPitch.Compute();
-
-  if(!errorCommunication)
-    throttle = (float)raspberryThrottle;
 
   if (throttle > 3072) throttle = 3072;                                   //We need some room to keep full control at full throttle.
 
@@ -362,3 +354,8 @@ bool recvDroneMsg(byte* msg, size_t maxLen) {
   return true;
 }
 
+//emergency landing function
+void emergencyLanding()
+{
+  SetpointRoll = InputRoll = OutputRoll = 0;
+}
