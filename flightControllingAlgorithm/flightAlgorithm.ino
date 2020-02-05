@@ -15,15 +15,22 @@
 #define MinSpeed 150
 #define MaxSpeed 300
 
+//communication global variables
 #define START_BYTE 0x4F
 #define END_BYTE 0x4F
 #define ESCAPE_BYTE 0x7F
+
+#define S_WAITING_HEADER 0
+#define S_READING_MSG 1
+#define S_READING_ESCAPE 2
 
 uint8_t systemm, gyro, accel, mag;   //same as byte type   --   values for the gyroscope callibration
 sensors_event_t event;  //this variable contains the values of the gyroscope axis x, y, z
 
 //variable to be received from the serial port
 int incomingByte = 0; // for incoming serial data
+
+int lostPakages;
 
 byte* rpiTX;
 byte* rpiTXBack;
@@ -35,13 +42,10 @@ typedef union { //data structure used for the communication (transforms a float 
   byte bval[4];
 } floatAsBytes;
 
-
 Adafruit_BNO055 bno = Adafruit_BNO055(55);
 Adafruit_PWMServoDriver pwm = Adafruit_PWMServoDriver();
 
-
 //PID algorithm parametres
-
 //Define Variables we'll be connecting to
 double SetpointRoll, InputRoll, OutputRoll;
 
@@ -56,6 +60,13 @@ PID myPIDPitch(&InputPitch, &OutputPitch, &SetpointPitch, Kp, Ki, Kd, DIRECT);
 //Define Variables we'll be connecting to
 double SetpointYaw, InputYaw, OutputYaw;
 PID myPIDYaw(&InputYaw, &OutputYaw, &SetpointYaw, Kp, Ki, Kd, DIRECT);
+
+//function prototipes
+
+void emergencyLanding();
+short unsigned int setSpeedMotor(int n, int speedM);
+void sendDroneMsg(byte* msg, size_t len);
+bool recvDroneMsg(byte* msg, size_t maxLen);
 
 void setup() {
   rpiTX = (byte*) calloc(64, sizeof(byte));  //reserve 64 bytes of memory in the variable to be readed from the serial port
@@ -72,6 +83,8 @@ void setup() {
   while (!Serial) {
     ;
   }
+
+  lostPakages = 0;
 
   //Turn on the warning led.
   digitalWrite(12, HIGH);
@@ -117,14 +130,37 @@ void setup() {
 }
 
 void loop() {
+  
   //read the information from the raspberry pi
   int8_t header;
   int16_t pitch, roll, yaw, throttle;
-  int32_t raspberryThrottle;
+  int16_t raspberryThrottle;
 
+  bool errorCommunication = false;
+  bool moreThan40Lost = false;
+
+  if(lostPakages > 40)
+  {
+    SetpointYaw = 0;
+    SetpointPitch = 0;
+    SetpointRoll = 0;
+    throttle = throttle * 0.96; //reduce the throttle speed
+    
+    errorCommunication = true;
+  }
+
+  if(lostPakages > 5 && lostPakages <= 40)
+  {
+    SetpointYaw = 0;
+    SetpointPitch = 0;
+    SetpointRoll = 0;
+  }
   //read the incoming bytes
-  if (recvDroneMsg(rpiTX, 64)) {
-   
+  
+  if (recvDroneMsg(rpiTX, 64)) 
+  {
+    lostPakages = 0;
+    
     header = rpiTX[0];
     roll = rpiTX[1] | (rpiTX[2] << 8);
     pitch = rpiTX[3] | (rpiTX[4] << 8);
@@ -135,108 +171,109 @@ void loop() {
     SetpointYaw = (float)yaw;
     SetpointPitch = (float)pitch;
     SetpointRoll = (float)roll;
+  }
+  else
+    lostPakages++;
 
-    //this function to read the sensors return the values in degrees per second
-    imu::Vector<3> euler = bno.getVector(Adafruit_BNO055::VECTOR_EULER);
+  //this function to read the sensors return the values in degrees per second
+  imu::Vector<3> euler = bno.getVector(Adafruit_BNO055::VECTOR_EULER);
 
-    //input values -- taken from the gyroscope
-    InputRoll = euler.x();   //Gyro pid input is deg/sec.
-    InputPitch = euler.y();  //Gyro pid input is deg/sec.
-    InputYaw = euler.z();    //Gyro pid input is deg/sec.
+  //input values -- taken from the gyroscope
+  InputRoll = euler.x();   //Gyro pid input is deg/sec.
+  InputPitch = euler.y();  //Gyro pid input is deg/sec.
+  InputYaw = euler.z();    //Gyro pid input is deg/sec.
 
-    //Calcuate the PID
-    myPIDRoll.Compute();
-    myPIDYaw.Compute();
-    myPIDPitch.Compute();
+  //Calcuate the PID
+  myPIDRoll.Compute();
+  myPIDYaw.Compute();
+  myPIDPitch.Compute();
 
+  if(!errorCommunication)
     throttle = (float)raspberryThrottle;
 
-    if (throttle > 3072) throttle = 3072;                                   //We need some room to keep full control at full throttle.
+  if (throttle > 3072) throttle = 3072;                                   //We need some room to keep full control at full throttle.
 
-    int esc_1 = throttle - OutputPitch + OutputRoll - OutputYaw; //Calculate the pulse for esc 1 (front-right - CCW)
-    int esc_2 = throttle + OutputPitch + OutputRoll + OutputYaw; //Calculate the pulse for esc 2 (rear-right - CW)
-    int esc_3 = throttle + OutputPitch - OutputRoll - OutputYaw; //Calculate the pulse for esc 3 (rear-left - CCW)
-    int esc_4 = throttle - OutputPitch - OutputRoll + OutputYaw; //Calculate the pulse for esc 4 (front-left - CW)
+  int esc_1 = throttle - OutputPitch + OutputRoll - OutputYaw; //Calculate the pulse for esc 1 (front-right - CCW)
+  int esc_2 = throttle + OutputPitch + OutputRoll + OutputYaw; //Calculate the pulse for esc 2 (rear-right - CW)
+  int esc_3 = throttle + OutputPitch - OutputRoll - OutputYaw; //Calculate the pulse for esc 3 (rear-left - CCW)
+  int esc_4 = throttle - OutputPitch - OutputRoll + OutputYaw; //Calculate the pulse for esc 4 (front-left - CW)
 
-    if (esc_1 < 1024) esc_1 = 1024;                                         //Keep the motors running.
-    if (esc_2 < 1024) esc_2 = 1024;                                         //Keep the motors running.
-    if (esc_3 < 1024) esc_3 = 1024;                                         //Keep the motors running.
-    if (esc_4 < 1024) esc_4 = 1024;                                         //Keep the motors running.
+  if (esc_1 < 1024) esc_1 = 1024;                                         //Keep the motors running.
+  if (esc_2 < 1024) esc_2 = 1024;                                         //Keep the motors running.
+  if (esc_3 < 1024) esc_3 = 1024;                                         //Keep the motors running.
+  if (esc_4 < 1024) esc_4 = 1024;                                         //Keep the motors running.
 
-    if (esc_1 > 3072)esc_1 = 3072;                                          //Limit the esc-1 pulse.
-    if (esc_2 > 3072)esc_2 = 3072;                                          //Limit the esc-2 pulse.
-    if (esc_3 > 3072)esc_3 = 3072;                                          //Limit the esc-3 pulse.
-    if (esc_4 > 3072)esc_4 = 3072;                                          //Limit the esc-4 pulse.
+  if (esc_1 > 3072)esc_1 = 3072;                                          //Limit the esc-1 pulse.
+  if (esc_2 > 3072)esc_2 = 3072;                                          //Limit the esc-2 pulse.
+  if (esc_3 > 3072)esc_3 = 3072;                                          //Limit the esc-3 pulse.
+  if (esc_4 > 3072)esc_4 = 3072;                                          //Limit the esc-4 pulse.
 
-    short unsigned int speedMotor1 = setSpeedMotor(0, esc_1);
-    short unsigned int speedMotor2 = setSpeedMotor(1, esc_2);
-    short unsigned int speedMotor3 = setSpeedMotor(2, esc_3);
-    short unsigned int speedMotor4 = setSpeedMotor(3, esc_4);
+  short unsigned int speedMotor1 = setSpeedMotor(0, esc_1);
+  short unsigned int speedMotor2 = setSpeedMotor(1, esc_2);
+  short unsigned int speedMotor3 = setSpeedMotor(2, esc_3);
+  short unsigned int speedMotor4 = setSpeedMotor(3, esc_4);
 
-    //send to the raspberry pi the new values of the motors
+  //send to the raspberry pi the new values of the motors
 
-    for(int i = 0 ; i < 64 ; i++) //initialize the arrays of bytes to zero
-      rpiTXBack[i] = 0x00;
-    
-    
-    byte header = 0x4F;
-    rpiTXBack[0] = header;
-    
-    counter++;
-    rpiTXBack[1] = (counter >> 8) & 0xFF;
-    rpiTXBack[2] = counter & 0xFF;
-    
-    floatAsBytes axisX, axisY, axisZ, axisW;
-    floatAsBytes accelerometerAxisX, accelerometerAxisY, accelerometerAxisZ;
+  for(int i = 0 ; i < 64 ; i++) //initialize the arrays of bytes to zero
+    rpiTXBack[i] = 0x00;
+  
+  byte headerToRP = 0x4F;
+  rpiTXBack[0] = headerToRP;
+  
+  counter++;
+  rpiTXBack[1] = (counter >> 8) & 0xFF;
+  rpiTXBack[2] = counter & 0xFF;
+  
+  floatAsBytes axisX, axisY, axisZ, axisW;
+  floatAsBytes accelerometerAxisX, accelerometerAxisY, accelerometerAxisZ;
 
-    
-    imu::Quaternion quat = bno.getQuat();
-    axisW.fval = (float) quat.w();
-    rpiTXBack[3] = axisW.bval[3];
-    rpiTXBack[4] = axisW.bval[2];
-    rpiTXBack[5] = axisW.bval[1];
-    rpiTXBack[6] = axisW.bval[0];
-    
-    axisY.fval = (float) quat.y();
-    rpiTXBack[7] = axisY.bval[3];
-    rpiTXBack[8] = axisY.bval[2];
-    rpiTXBack[9] = axisY.bval[1];
-    rpiTXBack[10] = axisY.bval[0];
-    
-    axisX.fval = (float) quat.x();
-    rpiTXBack[11] = axisX.bval[3];
-    rpiTXBack[12] = axisX.bval[2];
-    rpiTXBack[13] = axisX.bval[1];
-    rpiTXBack[14] = axisX.bval[0];
-    
-    axisZ.fval = (float) quat.z();
-    rpiTXBack[15] = axisZ.bval[3];
-    rpiTXBack[16] = axisZ.bval[2];
-    rpiTXBack[17] = axisZ.bval[1];
-    rpiTXBack[18] = axisZ.bval[0];
+  imu::Quaternion quat = bno.getQuat();
+  axisW.fval = (float) quat.w();
+  rpiTXBack[3] = axisW.bval[3];
+  rpiTXBack[4] = axisW.bval[2];
+  rpiTXBack[5] = axisW.bval[1];
+  rpiTXBack[6] = axisW.bval[0];
+  
+  axisY.fval = (float) quat.y();
+  rpiTXBack[7] = axisY.bval[3];
+  rpiTXBack[8] = axisY.bval[2];
+  rpiTXBack[9] = axisY.bval[1];
+  rpiTXBack[10] = axisY.bval[0];
+  
+  axisX.fval = (float) quat.x();
+  rpiTXBack[11] = axisX.bval[3];
+  rpiTXBack[12] = axisX.bval[2];
+  rpiTXBack[13] = axisX.bval[1];
+  rpiTXBack[14] = axisX.bval[0];
+  
+  axisZ.fval = (float) quat.z();
+  rpiTXBack[15] = axisZ.bval[3];
+  rpiTXBack[16] = axisZ.bval[2];
+  rpiTXBack[17] = axisZ.bval[1];
+  rpiTXBack[18] = axisZ.bval[0];
 
-    imu::Vector<3> accelerometer = bno.getVector(Adafruit_BNO055::VECTOR_ACCELEROMETER);
-    accelerometerAxisX.fval = accelerometer.x();
-    rpiTXBack[19] = accelerometerAxisX.bval[3];
-    rpiTXBack[20] = accelerometerAxisX.bval[2];
-    rpiTXBack[21] = accelerometerAxisX.bval[1];
-    rpiTXBack[22] = accelerometerAxisX.bval[0];
-    
-    accelerometerAxisY.fval = accelerometer.y();
-    rpiTXBack[23] = accelerometerAxisY.bval[3];
-    rpiTXBack[24] = accelerometerAxisY.bval[2];
-    rpiTXBack[25] = accelerometerAxisY.bval[1];
-    rpiTXBack[26] = accelerometerAxisY.bval[0];
-    
-    accelerometerAxisZ.fval = accelerometer.z();
-    rpiTXBack[27] = accelerometerAxisZ.bval[3];
-    rpiTXBack[28] = accelerometerAxisZ.bval[2];
-    rpiTXBack[29] = accelerometerAxisZ.bval[1];
-    rpiTXBack[30] = accelerometerAxisZ.bval[0];
+  imu::Vector<3> accelerometer = bno.getVector(Adafruit_BNO055::VECTOR_ACCELEROMETER);
+  accelerometerAxisX.fval = accelerometer.x();
+  rpiTXBack[19] = accelerometerAxisX.bval[3];
+  rpiTXBack[20] = accelerometerAxisX.bval[2];
+  rpiTXBack[21] = accelerometerAxisX.bval[1];
+  rpiTXBack[22] = accelerometerAxisX.bval[0];
+  
+  accelerometerAxisY.fval = accelerometer.y();
+  rpiTXBack[23] = accelerometerAxisY.bval[3];
+  rpiTXBack[24] = accelerometerAxisY.bval[2];
+  rpiTXBack[25] = accelerometerAxisY.bval[1];
+  rpiTXBack[26] = accelerometerAxisY.bval[0];
+  
+  accelerometerAxisZ.fval = accelerometer.z();
+  rpiTXBack[27] = accelerometerAxisZ.bval[3];
+  rpiTXBack[28] = accelerometerAxisZ.bval[2];
+  rpiTXBack[29] = accelerometerAxisZ.bval[1];
+  rpiTXBack[30] = accelerometerAxisZ.bval[0];
 
-    //send data back to the raspberry pi
-    sendDroneMsg(rpiTXBack, 64);
-  }
+  //send data back to the raspberry pi
+  sendDroneMsg(rpiTXBack, 64);
 }
 
 //motor speed function
@@ -247,7 +284,6 @@ short unsigned int setSpeedMotor(int n, int speedM){
 }
 
 //communication functions
-
 
 //send data to the serial port
 void sendDroneMsg(byte* msg, size_t len) {
@@ -264,11 +300,6 @@ void sendDroneMsg(byte* msg, size_t len) {
   Serial.write((crc << 8) & 0xFF);
   Serial.write(END_BYTE); // Write message end byte
 }
-
-#define S_WAITING_HEADER 0
-#define S_READING_MSG 1
-#define S_READING_ESCAPE 2
-
 
 //recive data from the serial port
 bool recvDroneMsg(byte* msg, size_t maxLen) {
@@ -328,26 +359,6 @@ bool recvDroneMsg(byte* msg, size_t maxLen) {
   if (expectedCRC != obtainedCRC) {
     return false;
   }
-
   return true;
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
