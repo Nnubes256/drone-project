@@ -102,10 +102,10 @@ void setup() {
   pwm.setPWMFreq(50);
 
   //turn on the motors in a low throttle
-  setSpeedMotor(0, 1024);
-  setSpeedMotor(1, 1024);
-  setSpeedMotor(2, 1024);
-  setSpeedMotor(3, 1024);
+  setSpeedMotor(0, 512);
+  setSpeedMotor(1, 512);
+  setSpeedMotor(2, 512);
+  setSpeedMotor(3, 512);
 
   //tunnig the PID algorithm
   SetpointPitch = 0;
@@ -190,10 +190,10 @@ void loop() {
   int esc_3 = throttle + OutputPitch - OutputRoll - OutputYaw; //Calculate the pulse for esc 3 (rear-left - CCW)
   int esc_4 = throttle - OutputPitch - OutputRoll + OutputYaw; //Calculate the pulse for esc 4 (front-left - CW)
 
-  if (esc_1 < 1024) esc_1 = 1024;                                         //Keep the motors running.
-  if (esc_2 < 1024) esc_2 = 1024;                                         //Keep the motors running.
-  if (esc_3 < 1024) esc_3 = 1024;                                         //Keep the motors running.
-  if (esc_4 < 1024) esc_4 = 1024;                                         //Keep the motors running.
+  if (esc_1 < 256) esc_1 = 256;                                         //Keep the motors running.
+  if (esc_2 < 256) esc_2 = 256;                                         //Keep the motors running.
+  if (esc_3 < 256) esc_3 = 256;                                         //Keep the motors running.
+  if (esc_4 < 256) esc_4 = 256;                                         //Keep the motors running.
 
   if (esc_1 > 3072)esc_1 = 3072;                                          //Limit the esc-1 pulse.
   if (esc_2 > 3072)esc_2 = 3072;                                          //Limit the esc-2 pulse.
