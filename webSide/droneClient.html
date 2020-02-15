@@ -1,0 +1,117 @@
+<html>
+    <head>
+        <meta charset="utf-8">
+        <title>Drone</title>
+        <link rel="stylesheet" href="style.css">
+
+        <script src='https://api.mapbox.com/mapbox-gl-js/v1.7.0/mapbox-gl.js'></script>
+            <link href='https://api.mapbox.com/mapbox-gl-js/v1.7.0/mapbox-gl.css' rel='stylesheet' />
+
+            <link rel="stylesheet" href="https://unpkg.com/leaflet@1.6.0/dist/leaflet.css"
+            integrity="sha512-xwE/Az9zrjBIphAcBb3F6JVqxf46+CDLwfLMHloNu6KEQCAWi6HcDUbeOfBIptF7tcCzusKFjFw2yuvEpDL9wQ=="
+            crossorigin=""/>
+
+            <!-- Make sure you put this AFTER Leaflet's CSS -->
+            <script src="https://unpkg.com/leaflet@1.6.0/dist/leaflet.js"
+            integrity="sha512-gZwIG9x3wUXg2hdXF6+rVkLF/0Vi9U8D2Ntg4Ga5I5BZpVkVxlJWbSQtXPSiUTtC0TjtGOmxa1AJPuV0CPthew=="
+            crossorigin="">
+        </script>
+        <script>
+            const bjs = document.createElement('script');
+            bjs.src = 'https://cdn.babylonjs.com/babylon.js';
+            bjs.async = false;
+            document.head.appendChild(bjs);
+        </script>
+    </head>
+    <body>
+        <nav class="nav-main"class="nav-main">
+            <div class="btn-toggle-nav" onclick="toggleNav()"></div>
+            <ul>
+                <li><a href="#">Home</a></li>
+                <li><a href="#">Drone stats</a></li>
+                <li><a href="#">Computer Vision</a></li>
+                <li><a href="#">Gallery</a></li>
+                <li><a href="#">Contact</a></li>
+            </ul>
+        </nav>
+
+        <aside class="nav-sidebar">
+            <ul>
+                <li><span>Drone Project</span></li>
+                <li><a href="#">Components used</a></li>
+                <li><a href="#">Technical requirements</a></li>
+                <li><a href="#">privacy policy</a></li>
+            </ul>
+        </aside>
+
+        <div class="mainBody">
+            <div class="left-part">
+                <div class="errorControl">
+                    <br/>
+                    <span id="ErrorLED">SYSTEM STATUS</span>
+                    <br/>
+                    <br/>
+                    <div class="errorControlLowSpeed"> 
+                        <a id="lowSpeedLED">LOW SPEED</a>
+                    </div>
+                    <div class="errorControlLowBattery"> 
+                        <a id="lowBatteryLED" style="text-align: center; align-content: center;">LOW BATTERY</a>
+                    </div>
+                    <div class="errorControlAngle"> 
+                        <a id="dangerousAngleLED">ALGLE</a>
+                    </div>
+                    <br/>
+                    <div class="errorControlImage"> 
+                        <img id="angleImage" src="primaryFlightDisplay.png" width="100px" height="100px" alt="Angle display">
+                    </div>
+                </div>   
+                <br/>
+                <br/>
+                <div class="droneModel">
+                    <br/>
+                    <span>DRONE MODEL</span>
+                    <model-3d background-color="#000000" src="drone3D.glb"></model-3d>
+                </div>
+            </div>
+
+            <video id="videoPlayer" class="center-part" controls>
+                <source id="videoCameraID"  style="height: inherit;" src="serverURL" type="video/mp4">
+            </video>
+
+            <div class="rigth-part">
+                <div class="stats">
+                    <br/>
+                    <br/>
+                    <div class="span-title">
+                        <span>STATS</span>
+                    </div>
+                    <br/>
+                    <a>Speed: </a>
+                    <a id="speedStats"></a>
+                    <br/>
+                    <a>Orientation: </a>
+                    <a id="orientationStats"></a>
+                    <br/>
+                    <a>Coordenates: </a>
+                    <a id="coordenatesStats"></a>
+                </div>   
+                <br/>
+                <br/>
+                <div class="maps">
+                    <div id='map' style='width: inherit; height: inherit;'></div>
+                    <script>
+                        mapboxgl.accessToken = 'pk.eyJ1IjoiYWxiZXJ0b3VhIiwiYSI6ImNrNmRoejBocjA3N28zbG52cXc2eWo4MG8ifQ.SvZlpvjSEalfP7q37YIc4Q';
+                        var map = new mapboxgl.Map({
+                            container: 'map',
+                            style: 'mapbox://styles/mapbox/streets-v11',
+                            hash: true,
+                            zoom: 13,
+                            center: [53.418640, -7.905946]
+                        });     
+                    </script>
+                </div>
+            </div>  
+        </div>   
+    </body>
+    <script src="droneJavaScript.js"></script>
+</html>
