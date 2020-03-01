@@ -1,79 +1,68 @@
-use core::convert::TryFrom;
-use core::fmt::Display;
-use serde::Deserialize;
-use serde::Serialize;
-use std::any::type_name;
-use std::error::Error;
+use crate::comms::common::ApplicationPacket;
+use crate::core::FullGPSData;
+use core::{convert::TryFrom, fmt::Display};
+use err_derive::Error;
+use serde::{Deserialize, Serialize};
+use std::{any::type_name, error::Error, fmt::Debug};
 
-use crate::comms::common::Acceleration;
-use crate::comms::common::MotorSpeed;
-use crate::comms::common::Orientation;
-use snafu::Snafu;
+use crate::comms::common::{Acceleration, MotorSpeed, Orientation};
 
-pub fn get_ground_codec() -> bincode2::Config {
+pub mod scheduler;
+
+pub const HEADER_VALUE: u8 = 0x7F;
+
+pub fn get_air_codec() -> bincode2::Config {
     let mut config = bincode2::config();
     config.array_length(bincode2::LengthOption::U8);
     config.limit(32);
     config
 }
 
-#[derive(Debug, Snafu)]
+#[derive(Debug, Error)]
 pub enum ReceiveError<T>
 where
-    T: Display,
+    T: 'static + Debug + Display + Error,
 {
-    #[snafu(display("No packets available"))]
+    #[error(display = "No packets available")]
     NoPacketsAvailable,
-    #[snafu(display("Deserialization failed: {}", inner))]
-    DeserializationError { inner: bincode2::Error },
-    #[snafu(display("Hardware driver error: {}", inner))]
-    DriverRecvError { inner: Box<T> },
+    #[error(display = "Deserialization failed: {}", _0)]
+    DeserializationError(bincode2::Error),
+    #[error(display = "Hardware driver error: {}", _0)]
+    DriverRecvError(Box<T>),
 }
 
 impl<T> From<bincode2::Error> for ReceiveError<T>
 where
-    T: Display,
+    T: 'static + Debug + Display + Error,
 {
     fn from(value: bincode2::Error) -> Self {
-        Self::DeserializationError { inner: value }
+        Self::DeserializationError(value)
     }
 }
 
-impl<T> ReceiveError<T> where
-    T: Display,
-{
-    pub fn from_driver_error(err: T) -> Self {
-        ReceiveError::DriverRecvError { inner: Box::new(err) }
-    }
-}
-
-#[derive(Debug, Snafu)]
+#[derive(Debug, Error)]
 pub enum SendError<T>
 where
-    T: Display,
+    T: 'static + Error + Debug + Display,
 {
-    #[snafu(display("Deserialization failed: {}", inner))]
-    SerializationError { inner: bincode2::Error },
-    #[snafu(display("Hardware driver error: {}", inner))]
-    DriverSendError { inner: Box<T> },
+    #[error(display = "Deserialization failed: {}", _0)]
+    SerializationError(bincode2::Error),
+    #[error(display = "Hardware driver error: {}", _0)]
+    DriverSendError(Box<T>),
 }
 
 impl<T> From<bincode2::Error> for SendError<T>
 where
     T: Display,
+    T: 'static + Error + Debug + Display,
 {
     fn from(value: bincode2::Error) -> Self {
-        Self::SerializationError { inner: value }
+        Self::SerializationError(value)
     }
 }
 
-impl<T> SendError<T> where
-    T: Display,
-{
-    pub fn from_driver_error(err: T) -> Self {
-        SendError::DriverSendError { inner: Box::new(err) }
-    }
-}
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct GPSNoData;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct G2AControllerAxisState {
@@ -106,33 +95,6 @@ impl G2AHeartbeat {
 
     pub fn timestamp(&self) -> u32 {
         self.timestamp
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ApplicationMessage {
-    application_id: u8,
-    message: Vec<u8>,
-}
-
-impl ApplicationMessage {
-    pub fn new(app_id: u8, message: Vec<u8>) -> Self {
-        ApplicationMessage {
-            application_id: app_id,
-            message,
-        }
-    }
-
-    pub fn app_id(&self) -> u8 {
-        self.application_id
-    }
-
-    pub fn message(&self) -> &Vec<u8> {
-        &self.message
-    }
-
-    pub fn message_iter(&self) -> ::std::slice::Iter<u8> {
-        self.message.iter()
     }
 }
 
@@ -169,7 +131,7 @@ macro_rules! command_type {
             fn try_from(internal: CommandTypeInternal) -> Result<Self, <Self as TryFrom<CommandTypeInternal>>::Error> {
                 match internal.command_type {
                     $(
-                        $commandid => Ok($cmdtypeenum::$commandname(get_ground_codec().deserialize(&internal.data)?)),
+                        $commandid => Ok($cmdtypeenum::$commandname(get_air_codec().deserialize(&internal.data)?)),
                     )*
                     _ => Err(Box::new(bincode2::ErrorKind::Custom(format!("Unknown {}: {}", type_name::<$cmdtypeenum>(), internal.command_type))))
                 }
@@ -183,7 +145,7 @@ macro_rules! command_type {
                     data: match self {
                         $(
                             $cmdtypeenum::$commandname(data) => {
-                                get_ground_codec().serialize(&data).unwrap_or(Vec::new())
+                                get_air_codec().serialize(&data).unwrap_or(Vec::new())
                             },
                         )*
                     }
@@ -199,12 +161,14 @@ command_type!(A2GCommandType => {
     MOTR(0x02) -> MotorSpeed,
     ORNT(0x03) -> Orientation,
     ACEL(0x04) -> Acceleration,
-    APPM(0x10) -> ApplicationMessage
+    APPM(0x10) -> ApplicationPacket,
+    GPSN(0x05) -> GPSNoData,
+    GPSD(0x06) -> FullGPSData
 });
 
 command_type!(G2ACommandType => {
     CNTA(0x02) -> G2AControllerAxisState,
-    APPM(0x10) -> ApplicationMessage,
+    APPM(0x10) -> ApplicationPacket,
     HEAR(0xFF) -> G2AHeartbeat
 });
 
@@ -222,13 +186,34 @@ pub struct A2GMessage {
     pub command: A2GCommandType,
 }
 
-pub trait GroundCommunicationService : Sized {
-    type GroundCommunicationOptions;
-    type HardwareDriverError: Display;
+impl G2AMessage {
+    pub fn new(counter: u16, command: G2ACommandType) -> Self {
+        G2AMessage {
+            header: HEADER_VALUE,
+            counter,
+            command,
+        }
+    }
+}
 
-    fn setup(config: Self::GroundCommunicationOptions) -> Result<Self, Self::HardwareDriverError>;
+impl A2GMessage {
+    pub fn new(counter: u16, command: A2GCommandType) -> Self {
+        A2GMessage {
+            header: HEADER_VALUE,
+            counter,
+            command,
+        }
+    }
+}
+
+pub trait AirCommunicationService<Tx, Rx>: Sized {
+    type AirCommunicationOptions;
+    type HardwareDriverError: 'static + Error;
+
+    fn setup(config: Self::AirCommunicationOptions) -> Result<Self, Self::HardwareDriverError>;
     fn get_max_app_message_size() -> usize;
-    fn send(&mut self, msg: A2GMessage) -> Result<bool, SendError<Self::HardwareDriverError>>;
+    fn is_tx_busy(&mut self) -> bool;
+    fn send(&mut self, msg: Tx) -> Result<bool, SendError<Self::HardwareDriverError>>;
     fn recv_available(&mut self) -> usize;
-    fn recv(&mut self) -> Result<G2AMessage, ReceiveError<Self::HardwareDriverError>>;
+    fn recv(&mut self) -> Result<Rx, ReceiveError<Self::HardwareDriverError>>;
 }

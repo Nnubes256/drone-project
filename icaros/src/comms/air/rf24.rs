@@ -1,10 +1,11 @@
-use crate::comms::ground::base::{GroundCommunicationService, get_ground_codec};
-#[cfg(target = "armv7-unknown-linux-gnueabihf")]
-use rf24::{RF24, SPISpeed, DataRate, PowerAmplifierLevel};
+use std::collections::VecDeque;
+use icaros_base::comms::air::{get_air_codec, AirCommunicationService};
+use rf24::{DataRate, PowerAmplifierLevel, SPISpeed, RF24};
 
 pub struct RF24CommunicationService {
     driver: RF24,
-    codec: bincode2::Config
+    codec: bincode2::Config,
+    tx_queue: VecDeque<Vec<u8>>
 }
 
 pub struct RF24CommunicationOptions {
@@ -19,15 +20,13 @@ pub struct RF24CommunicationOptions {
     pub tx_power: PowerAmplifierLevel
 }
 
-impl GroundCommunicationService for RF24CommunicationService {
-    type GroundCommunicationOptions = RF24CommunicationOptions;
+impl AirCommunicationService<A2GMessage, G2AMessage> for RF24CommunicationService {
+    type AirCommunicationOptions = RF24CommunicationOptions;
     type HardwareDriverError = rf24::RF24Error;
 
-    fn setup(options: Self::GroundCommunicationOptions) -> Result<Self, Self::HardwareDriverError> {
-        let mut driver = RF24::from_spi_device_with_speed(
-            options.ce_pin,
-            options.csn_pin,
-            options.bus_speed);
+    fn setup(options: Self::AirCommunicationOptions) -> Result<Self, Self::HardwareDriverError> {
+        let mut driver =
+            RF24::from_spi_device_with_speed(options.ce_pin, options.csn_pin, options.bus_speed);
         if driver.begin() {
             driver.set_channel(options.channel);
             driver.set_data_rate(options.data_rate);
@@ -43,12 +42,16 @@ impl GroundCommunicationService for RF24CommunicationService {
             }
             Ok(RF24CommunicationService {
                 driver,
-                codec: get_ground_codec()
-            }
+                tx_queue: VecDeque::new(),
+                codec: get_air_codec(),
+            })
         } else {
             Err(rf24::RF24Error::LibraryError)
         }
-        driver.read_dynamic_payload(buffer: &mut Vec<u8>)
+    }
+
+    fn is_tx_busy(&mut self) -> bool {
+        false
     }
 
     fn get_max_app_message_size() -> usize {
@@ -63,7 +66,7 @@ impl GroundCommunicationService for RF24CommunicationService {
 
         let message = self.codec.serialize(&msg)?;
 
-        self.driver.write_ack_payload(0, &message);
+        self.tx_queue.push_back(message);
 
         Ok(true)
     }
@@ -81,12 +84,19 @@ impl GroundCommunicationService for RF24CommunicationService {
             return Err(ReceiveError::NoPacketsAvailable);
         }
 
+        if !self.tx_queue.is_empty() {
+            let message = self.tx_queue.pop_front().unwrap();
+            self.driver.write_ack_payload(0, &message);
+        }
+
         let mut message_bytes: Vec<u8> = Vec::with_capacity(32);
         match self.driver.read_dynamic_payload(&mut message_bytes) {
             Ok(has_packet) => {
-                if !has_packet { return Err(ReceiveError::NoPacketsAvailable); }
-            },
-            Err(err) => return Err(ReceiveError::from_driver_error(err))
+                if !has_packet {
+                    return Err(ReceiveError::NoPacketsAvailable);
+                }
+            }
+            Err(err) => return Err(ReceiveError::from_driver_error(err)),
         }
 
         Ok(self.codec.deserialize(&message_bytes)?)

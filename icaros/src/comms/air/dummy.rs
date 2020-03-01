@@ -1,11 +1,20 @@
-use crate::comms::ground::base::A2GMessage;
-use crate::comms::ground::base::G2ACommandType;
-use crate::comms::ground::base::G2AMessage;
-use crate::comms::ground::base::GroundCommunicationService;
-use crate::comms::ground::base::ReceiveError;
-use crate::comms::ground::base::SendError;
-use crate::comms::ground::base::get_ground_codec;
 use bincode2;
+use err_derive::Error;
+use icaros_base::comms::air::{
+    get_air_codec, A2GMessage, AirCommunicationService, G2AMessage, ReceiveError, SendError,
+};
+
+#[derive(Debug, Error)]
+pub enum DummyError {
+    #[error(display = "{}", _0)]
+    Error(String),
+}
+
+impl From<String> for DummyError {
+    fn from(value: String) -> Self {
+        DummyError::Error(value)
+    }
+}
 
 pub struct DummyController {
     pub ground_queue: Vec<Vec<u8>>,
@@ -13,14 +22,15 @@ pub struct DummyController {
     codec: bincode2::Config,
 }
 
-impl GroundCommunicationService for DummyController {
-    type GroundCommunicationOptions = ();
-    type HardwareDriverError = String;
-    fn setup(_: Self::GroundCommunicationOptions) -> Result<Self, String> {
+impl AirCommunicationService<A2GMessage, G2AMessage> for DummyController {
+    type AirCommunicationOptions = ();
+    type HardwareDriverError = DummyError;
+    fn setup(_: Self::AirCommunicationOptions) -> Result<Self, Self::HardwareDriverError> {
+        info!("[AirDummyController] Ready!");
         Ok(DummyController {
             ground_queue: Vec::new(),
             drone_queue: Vec::new(),
-            codec: get_ground_codec(),
+            codec: get_air_codec(),
         })
     }
 
@@ -28,7 +38,7 @@ impl GroundCommunicationService for DummyController {
         let message = match self.codec.serialize(&msg) {
             Ok(msg_bytes) => msg_bytes,
             Err(e) => {
-                return Err(SendError::SerializationError { inner: e });
+                return Err(SendError::SerializationError(e));
             }
         };
 
@@ -49,12 +59,16 @@ impl GroundCommunicationService for DummyController {
 
         match self.codec.deserialize::<G2AMessage>(&new_msg) {
             Ok(message) => Ok(message),
-            Err(err) => Err(ReceiveError::DeserializationError { inner: err }),
+            Err(err) => Err(ReceiveError::DeserializationError(err)),
         }
     }
 
     fn get_max_app_message_size() -> usize {
         26
+    }
+
+    fn is_tx_busy(&mut self) -> bool {
+        false
     }
 }
 
@@ -63,6 +77,7 @@ impl DummyController {
         self.drone_queue.push(get_codec().serialize(&msg).unwrap());
     }*/
 
+    #[cfg(test)]
     pub fn send_drone_message_bytes(&mut self, msg: Vec<u8>) {
         self.drone_queue.push(msg);
     }
@@ -75,10 +90,13 @@ impl DummyController {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::comms::common::{Acceleration, MotorSpeed, Orientation};
-    use crate::comms::ground::base::{A2GCommandType, ApplicationMessage};
-    use crate::utils::quartenion::Quartenion;
-    use crate::utils::vector::Point3;
+    use icaros_base::{
+        comms::{
+            air::{A2GCommandType, G2ACommandType},
+            common::{Acceleration, MotorSpeed, Orientation, ApplicationPacket},
+        },
+        utils::{Point3, Quartenion},
+    };
 
     #[test]
     fn a2g_packet_motr_serialize() {
@@ -94,7 +112,7 @@ mod tests {
 
         match dummy_comms.send(test_packet) {
             Ok(result) => assert_eq!(result, true),
-            Err(err) => panic!("{}", err)
+            Err(err) => panic!("{}", err),
         }
 
         let expected: &[u8] = &[
@@ -123,7 +141,7 @@ mod tests {
 
         match dummy_comms.send(test_packet) {
             Ok(result) => assert_eq!(result, true),
-            Err(err) => panic!("{}", err)
+            Err(err) => panic!("{}", err),
         }
 
         let expected: &[u8] = &[
@@ -153,7 +171,7 @@ mod tests {
 
         match dummy_comms.send(test_packet) {
             Ok(result) => assert_eq!(result, true),
-            Err(err) => panic!("{}", err)
+            Err(err) => panic!("{}", err),
         }
 
         let expected: &[u8] = &[
@@ -172,7 +190,7 @@ mod tests {
         let test_packet = A2GMessage {
             header: 0x7F,
             counter: 0x3,
-            command: A2GCommandType::APPM(ApplicationMessage::new(
+            command: A2GCommandType::APPM(ApplicationPacket::new(
                 0x7F,
                 vec![0x00, 0x01, 0x02, 0x03],
             )),
@@ -184,7 +202,7 @@ mod tests {
 
         match dummy_comms.send(test_packet) {
             Ok(result) => assert_eq!(result, true),
-            Err(err) => panic!("{}", err)
+            Err(err) => panic!("{}", err),
         }
 
         let expected: &[u8] = &[
@@ -202,7 +220,7 @@ mod tests {
         let test_packet = A2GMessage {
             header: 0x7F,
             counter: 0x3,
-            command: A2GCommandType::APPM(ApplicationMessage::new(
+            command: A2GCommandType::APPM(ApplicationPacket::new(
                 0x7F,
                 vec![
                     1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22,
@@ -217,7 +235,7 @@ mod tests {
 
         match dummy_comms.send(test_packet) {
             Ok(result) => assert_eq!(result, true),
-            Err(err) => panic!("{}", err)
+            Err(err) => panic!("{}", err),
         }
 
         let expected: &[u8] = &[
@@ -237,7 +255,7 @@ mod tests {
         let test_packet = A2GMessage {
             header: 0x7F,
             counter: 0x3,
-            command: A2GCommandType::APPM(ApplicationMessage::new(
+            command: A2GCommandType::APPM(ApplicationPacket::new(
                 0x7F,
                 vec![
                     1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22,

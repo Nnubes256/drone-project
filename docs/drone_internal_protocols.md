@@ -14,7 +14,8 @@ At 9600 baud rate, assuming 2 overhead bits (start+stop) and 1 separator bit, us
 
 Transmission should be doable; used data speed < usable data speed.
 
-Packet latency would be slightly less than 20ms. Less latency is useless anyway due to the PWM frequency the motors are driven at (50 Hz); slightly less may be good though, in order to counter kernel-bound latency.
+Packet latency would be slightly less than 20ms. ~~Less latency is useless anyway due to the PWM frequency the motors are driven at (50 Hz); slightly less may be good though, in order to counter kernel-bound latency.~~
+Due to hardware constraints, we might as well go ahead and use a higher bitrate.
 
 ## Requirements
 
@@ -24,12 +25,38 @@ Packet latency would be slightly less than 20ms. Less latency is useless anyway 
 
 Unless specified, everything is **little-endian**.
 
+All packets are structured like so:
+- Start byte: 1 byte, constant 0x4F
+- Message
+- CRC16 of message: 2 bytes
+- End byte: 1 byte, constant 0x4F
+
+On the message, bytes 0x4F and 0x7F are escaped by prefixing
+a 0x7F byte before them.
+
+CRC16 calculation is done using the following C code, or equivalent:
+```c
+uint16_t crc16_update(uint16_t crc, uint8_t a)
+{
+int i;
+
+crc ^= a;
+for (i = 0; i < 8; ++i)
+{
+    if (crc & 1)
+        crc = (crc >> 1) ^ 0xA001;
+    else
+        crc = (crc >> 1);
+}
+
+return crc;
+}
+```
+
 ### Arduino --> RPi, v0.3
 
-- Header byte: 1 byte
-  - Constant value: 0x4F
 - Counter: 2 bytes (`uint16_t`)
-  - Increments on each packet sent; good to measure lost packets and ensure synchronisation.
+  - Increments on each packet sent; good to measure lost packets and ensure synchronization.
 - Motor speed: 2 bytes (`uint16_t`) * 4 motors = 8 bytes
   - Range taken by the PCA9685 servo controller has 12 bits of resolution.
 - Orientation quartenion: ~~8~~ 4 bytes (~~`double`~~ `float` or less) * 4 axis = ~~32~~ 16 bytes (see optimization)
@@ -43,17 +70,14 @@ Unless specified, everything is **little-endian**.
   and thus we can bitpack the entire quartenion into 12 * 4 = 48 bits
   = 6 bytes!
 - Accelerometer XYZ: 4 bytes (`float`) * 3 axes = 12 bytes
-- Padding: 25 bytes
+- Padding: 27 bytes
 
 = 64 bytes
 
 ### RPi --> Arduino, v0.3
 
-- Header byte: 1 byte
-  - Constant value: 0x4F
 - Desired roll/pitch/yaw: 2 bytes (**int16_t**) * 3 axes = 6 bytes
-- Desired throttle: 2 bytes (uint32_t)
-- PID constant values: 4 bytes (float) * 3 values * 3 axis = 36 bytes
-- Padding: 20 bytes
+- Desired throttle: 2 bytes (uint16_t)
+- Padding: 56 bytes
 
 = 64 bytes
