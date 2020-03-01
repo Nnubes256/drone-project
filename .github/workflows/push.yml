@@ -37,3 +37,9 @@ jobs:
     - name: Run icaros tests
       run: cargo test --verbose
       working-directory: icaros
+    - name: Build icaros-control
+      run: cargo build --verbose
+      working-directory: icaros-control
+    - name: Run icaros-control tests
+      run: cargo test --verbose
+      working-directory: icaros-control
