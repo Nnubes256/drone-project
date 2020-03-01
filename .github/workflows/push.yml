@@ -24,6 +24,8 @@ jobs:
       with:
         path: icaros/target
         key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
+    - name: Install external dependencies
+      run: sudo apt-get install libudev-dev
     - name: Build icaros
       run: cargo build --verbose
       working-directory: icaros
