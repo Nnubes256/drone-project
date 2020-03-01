@@ -28,6 +28,7 @@ jobs:
       uses: actions-rs/toolchain@v1.0.3
       with:
         toolchain: nightly
+        override: true
     - name: Install external dependencies
       run: sudo apt-get install libudev-dev
     - name: Build icaros
