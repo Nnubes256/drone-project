@@ -156,11 +156,10 @@ void loop() {
   {
     lostPackages = 0;
     
-    header = rpiTX[0];
-    roll = rpiTX[1] | (rpiTX[2] << 8);
-    pitch = rpiTX[3] | (rpiTX[4] << 8);
-    yaw = rpiTX[5] | (rpiTX[6] << 8);
-    throttle = rpiTX[7] | (rpiTX[8] << 8);
+    roll = ((int16_t) rpiTX[0]) | (((int16_t) rpiTX[1]) << 8);
+    pitch = ((int16_t) rpiTX[2]) | (((int16_t) rpiTX[3]) << 8);
+    yaw = ((int16_t) rpiTX[4]) | (((int16_t) rpiTX[5]) << 8);
+    throttle = ((uint16_t) rpiTX[6]) | (((uint16_t) rpiTX[7]) << 8);
 
     //the setpoints must be taken from the raspberry pi
     SetpointYaw = (float)yaw;
@@ -196,20 +195,20 @@ void loop() {
 
   if (throttle > 3072) throttle = 3072;                                   //We need some room to keep full control at full throttle.
 
-  esc_1 = throttle - OutputPitch + OutputRoll - OutputYaw; //Calculate the pulse for esc 1 (front-right - CCW)
-  esc_2 = throttle + OutputPitch + OutputRoll + OutputYaw; //Calculate the pulse for esc 2 (rear-right - CW)
-  esc_3 = throttle + OutputPitch - OutputRoll - OutputYaw; //Calculate the pulse for esc 3 (rear-left - CCW)
-  esc_4 = throttle - OutputPitch - OutputRoll + OutputYaw; //Calculate the pulse for esc 4 (front-left - CW)
+  esc_1 = throttle - (int16_t) OutputPitch + (int16_t) OutputRoll - (int16_t) OutputYaw; //Calculate the pulse for esc 1 (front-right - CCW)
+  esc_2 = throttle + (int16_t) OutputPitch + (int16_t) OutputRoll + (int16_t) OutputYaw; //Calculate the pulse for esc 2 (rear-right - CW)
+  esc_3 = throttle + (int16_t) OutputPitch - (int16_t) OutputRoll - (int16_t) OutputYaw; //Calculate the pulse for esc 3 (rear-left - CCW)
+  esc_4 = throttle - (int16_t) OutputPitch - (int16_t) OutputRoll + (int16_t) OutputYaw; //Calculate the pulse for esc 4 (front-left - CW)
 
-  if (esc_1 < 256) esc_1 = 256;                                         //Keep the motors running.
-  if (esc_2 < 256) esc_2 = 256;                                         //Keep the motors running.
-  if (esc_3 < 256) esc_3 = 256;                                         //Keep the motors running.
-  if (esc_4 < 256) esc_4 = 256;                                         //Keep the motors running.
+  if (esc_1 < 1024) esc_1 = 1024;                                         //Keep the motors running.
+  if (esc_2 < 1024) esc_2 = 1024;                                         //Keep the motors running.
+  if (esc_3 < 1024) esc_3 = 1024;                                         //Keep the motors running.
+  if (esc_4 < 1024) esc_4 = 1024;                                         //Keep the motors running.
 
-  if (esc_1 > 3072)esc_1 = 3072;                                          //Limit the esc-1 pulse.
-  if (esc_2 > 3072)esc_2 = 3072;                                          //Limit the esc-2 pulse.
-  if (esc_3 > 3072)esc_3 = 3072;                                          //Limit the esc-3 pulse.
-  if (esc_4 > 3072)esc_4 = 3072;                                          //Limit the esc-4 pulse.
+  if (esc_1 > 3072) esc_1 = 3072;                                          //Limit the esc-1 pulse.
+  if (esc_2 > 3072) esc_2 = 3072;                                          //Limit the esc-2 pulse.
+  if (esc_3 > 3072) esc_3 = 3072;                                          //Limit the esc-3 pulse.
+  if (esc_4 > 3072) esc_4 = 3072;                                          //Limit the esc-4 pulse.
 
   short unsigned int speedMotor1 = setSpeedMotor(0, esc_1);
   short unsigned int speedMotor2 = setSpeedMotor(1, esc_2);
@@ -218,64 +217,73 @@ void loop() {
 
   //send to the raspberry pi the new values of the motors
 
-  for(int i = 0 ; i < 64 ; i++) //initialize the arrays of bytes to zero
-    rpiTXBack[i] = 0x00;
-  
-  byte headerToRP = 0x4F;
-  rpiTXBack[0] = headerToRP;
-  
-  counter++;
+  for(int i = 0 ; i < 64 ; i++)
+  {
+    rpiTXBack[i] = 0x01;
+  }
+
   rpiTXBack[1] = (counter >> 8) & 0xFF;
-  rpiTXBack[2] = counter & 0xFF;
-  
+  rpiTXBack[0] = counter & 0xFF;
+  counter++;
+
+  rpiTXBack[2] = esc_4 & 0xFF;
+  rpiTXBack[3] = (esc_4 >> 8) & 0xFF;
+  rpiTXBack[4] = esc_1 & 0xFF;
+  rpiTXBack[5] = (esc_1 >> 8) & 0xFF;
+  rpiTXBack[6] = esc_3 & 0xFF;
+  rpiTXBack[7] = (esc_3 >> 8) & 0xFF;
+  rpiTXBack[8] = esc_2 & 0xFF;
+  rpiTXBack[9] = (esc_2 >> 8) & 0xFF;
+
   floatAsBytes axisX, axisY, axisZ, axisW;
   floatAsBytes accelerometerAxisX, accelerometerAxisY, accelerometerAxisZ;
 
   imu::Quaternion quat = bno.getQuat();
+  
   axisW.fval = (float) quat.w();
-  rpiTXBack[3] = axisW.bval[3];
-  rpiTXBack[4] = axisW.bval[2];
-  rpiTXBack[5] = axisW.bval[1];
-  rpiTXBack[6] = axisW.bval[0];
-  
-  axisY.fval = (float) quat.y();
-  rpiTXBack[7] = axisY.bval[3];
-  rpiTXBack[8] = axisY.bval[2];
-  rpiTXBack[9] = axisY.bval[1];
-  rpiTXBack[10] = axisY.bval[0];
-  
+  rpiTXBack[10] = axisW.bval[0];
+  rpiTXBack[11] = axisW.bval[1];
+  rpiTXBack[12] = axisW.bval[2];
+  rpiTXBack[13] = axisW.bval[3];
+    
   axisX.fval = (float) quat.x();
-  rpiTXBack[11] = axisX.bval[3];
-  rpiTXBack[12] = axisX.bval[2];
-  rpiTXBack[13] = axisX.bval[1];
   rpiTXBack[14] = axisX.bval[0];
-  
+  rpiTXBack[15] = axisX.bval[1];
+  rpiTXBack[16] = axisX.bval[2];
+  rpiTXBack[17] = axisX.bval[3];
+
+  axisX.fval = (float) quat.x();
+  rpiTXBack[18] = axisY.bval[0];
+  rpiTXBack[19] = axisY.bval[1];
+  rpiTXBack[20] = axisY.bval[2];
+  rpiTXBack[21] = axisY.bval[3];
+
   axisZ.fval = (float) quat.z();
-  rpiTXBack[15] = axisZ.bval[3];
-  rpiTXBack[16] = axisZ.bval[2];
-  rpiTXBack[17] = axisZ.bval[1];
-  rpiTXBack[18] = axisZ.bval[0];
+  rpiTXBack[22] = axisZ.bval[0];
+  rpiTXBack[23] = axisZ.bval[1];
+  rpiTXBack[24] = axisZ.bval[2];
+  rpiTXBack[25] = axisZ.bval[3];
 
-  imu::Vector<3> accelerometer = bno.getVector(Adafruit_BNO055::VECTOR_ACCELEROMETER);
-  accelerometerAxisX.fval = accelerometer.x();
-  rpiTXBack[19] = accelerometerAxisX.bval[3];
-  rpiTXBack[20] = accelerometerAxisX.bval[2];
-  rpiTXBack[21] = accelerometerAxisX.bval[1];
-  rpiTXBack[22] = accelerometerAxisX.bval[0];
-  
-  accelerometerAxisY.fval = accelerometer.y();
-  rpiTXBack[23] = accelerometerAxisY.bval[3];
-  rpiTXBack[24] = accelerometerAxisY.bval[2];
-  rpiTXBack[25] = accelerometerAxisY.bval[1];
-  rpiTXBack[26] = accelerometerAxisY.bval[0];
-  
-  accelerometerAxisZ.fval = accelerometer.z();
-  rpiTXBack[27] = accelerometerAxisZ.bval[3];
-  rpiTXBack[28] = accelerometerAxisZ.bval[2];
-  rpiTXBack[29] = accelerometerAxisZ.bval[1];
-  rpiTXBack[30] = accelerometerAxisZ.bval[0];
+  imu::Vector<3> accelerometer = bno.getVector(Adafruit_BNO055::VECTOR_LINEARACCEL);
+  accelerometerAxisX.fval = (float) accelerometer.x();
+  rpiTXBack[26] = accelerometerAxisX.bval[0];
+  rpiTXBack[27] = accelerometerAxisX.bval[1];
+  rpiTXBack[28] = accelerometerAxisX.bval[2];
+  rpiTXBack[29] = accelerometerAxisX.bval[3];
 
-  //send data back to the raspberry pi
+  accelerometerAxisY.fval = (float) accelerometer.y();
+  rpiTXBack[30] = accelerometerAxisY.bval[0];
+  rpiTXBack[31] = accelerometerAxisY.bval[1];
+  rpiTXBack[32] = accelerometerAxisY.bval[2];
+  rpiTXBack[33] = accelerometerAxisY.bval[3];
+
+  accelerometerAxisZ.fval = (float) accelerometer.z();
+  rpiTXBack[34] = accelerometerAxisZ.bval[0];
+  rpiTXBack[35] = accelerometerAxisZ.bval[1];
+  rpiTXBack[36] = accelerometerAxisZ.bval[2];
+  rpiTXBack[37] = accelerometerAxisZ.bval[3];
+
+  //sendDroneMsg1(rpiTXBack, 64);
   sendDroneMsg(rpiTXBack, 64);
 }
 
@@ -293,14 +301,20 @@ void sendDroneMsg(byte* msg, size_t len) {
   uint16_t crc = 0;
   Serial.write(START_BYTE); // Write message start byte
   for (int i = 0; i < len; i++) {
-    if (msg[i] == END_BYTE || msg[i] == ESCAPE_BYTE) { // If message byte is equal to end byte, it gets escaped
+    if (msg[i] == END_BYTE || msg[i] == ESCAPE_BYTE) {
       Serial.write(ESCAPE_BYTE);
     }
     Serial.write(msg[i]);
     crc = _crc16_update(crc, msg[i]);
   }
+  if ((crc & 0xFF) == END_BYTE || (crc & 0xFF) == ESCAPE_BYTE) {
+    Serial.write(ESCAPE_BYTE);
+  }
   Serial.write(crc & 0xFF);
-  Serial.write((crc << 8) & 0xFF);
+  if (((crc >> 8) & 0xFF) == END_BYTE || ((crc >> 8) & 0xFF) == ESCAPE_BYTE) {
+    Serial.write(ESCAPE_BYTE);
+  }
+  Serial.write((crc >> 8) & 0xFF);
   Serial.write(END_BYTE); // Write message end byte
 }
 
@@ -315,9 +329,10 @@ bool recvDroneMsg(byte* msg, size_t maxLen) {
   // Receive loop
   while (tries > 0 && bytesParsed <= maxLen + 1 && !doneParsing) {
     // Read from serial
+    //Serial.write("GET");
     parsedByte = Serial.read();
-    if (parsedByte == -1) { // Avoid blocking by identifying lack of messages
-      tries--;
+    if (parsedByte == 255 || parsedByte == -1) { // Avoid blocking by identifying lack of messages
+      tries -= 1;
     } else {
       switch (state) {
         case S_WAITING_HEADER: // We are waiting for a header
@@ -362,6 +377,7 @@ bool recvDroneMsg(byte* msg, size_t maxLen) {
   if (expectedCRC != obtainedCRC) {
     return false;
   }
+
   return true;
 }
 
