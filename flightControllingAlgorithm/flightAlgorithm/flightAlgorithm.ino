@@ -30,7 +30,7 @@ sensors_event_t event;  //this variable contains the values of the gyroscope axi
 //variable to be received from the serial port
 int incomingByte = 0; // for incoming serial data
 
-int lostPakages;
+int lostPackages = 0;
 
 byte* rpiTX;
 byte* rpiTXBack;
@@ -85,11 +85,6 @@ void setup() {
     ;
   }
 
-  lostPakages = 0;
-
-  //Turn on the warning led.
-  digitalWrite(12, HIGH);
-
   /* Initialise the gyroscope */
   if (!bno.begin()) {
     Serial.print("No gyroscope detected");
@@ -117,17 +112,30 @@ void setup() {
   myPIDYaw.SetMode(AUTOMATIC);
 
   //the giroscope calibration -- the gyroscope should not be used until the system values is greater than 1
-  uint8_t systemm, gyro, accel, mag;
-  systemm = gyro = accel = mag = 0;
-  bno.getCalibration(&systemm, &gyro, &accel, &mag);
+  uint8_t sys, gyro, accel, mag;
+  long bnoID;
+  int eeAddress = 0;
+  sys = gyro = accel = mag = 0;
 
-  /* The data should be ignored until the system calibration is > 0 */
-  if (!systemm) { //the system variable is 0 untill the gyroscope is callibrated  --  the calibrating qualitie varies from 0 to 3 being 3 the optimal callibration
-    while (1); //this line is for the system not to execute if the values of the gyroscope are wrong -- remove if in doesn't work
+  EEPROM.get(eeAddress, bnoID);
+  adafruit_bno055_offsets_t calibrationData;
+  sensor_t sensor;
+  
+  bno.getSensor(&sensor);
+  if (bnoID == sensor.sensor_id) {
+    // Found some pre-existing calibration data!
+    eeAddress += sizeof(long);
+    EEPROM.get(eeAddress, calibrationData);
+    bno.setSensorOffsets(calibrationData);
   }
 
-  //When everything is done, turn off the led.
-  digitalWrite(12, LOW);
+  
+  bno.setExtCrystalUse(true);
+
+  bno.getCalibration(&sys, &gyro, &accel, &mag);
+  while (sys == 0) {
+    bno.getCalibration(&sys, &gyro, &accel, &mag);
+  }
 }
 
 void loop() {
