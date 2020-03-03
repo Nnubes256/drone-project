@@ -5,6 +5,7 @@
 #include <util/crc16.h>
 
 //libraries for controlling the gyroscope
+#include <EEPROM.h>
 #include <Adafruit_Sensor.h>
 #include <Adafruit_BNO055.h>
 #include <utility/imumaths.h>
@@ -93,8 +94,12 @@ void setup() {
   delay(1000);
   bno.setExtCrystalUse(true);
 
-  //set the frecuency of the motors to 50 hz
-  pwm.setPWMFreq(50);
+  pwm.begin();
+  // In theory the internal oscillator is 25MHz but it really isn't
+  // that precise. You can 'calibrate' by tweaking this number till
+  // you get the frequency you're expecting!
+  pwm.setOscillatorFrequency(27000000);  // The int.osc. is closer to 27MHz  
+  pwm.setPWMFreq(50);  // Analog servos run at ~50 Hz updates
 
   //turn on the motors in a low throttle
   setSpeedMotor(0, 512);
@@ -141,45 +146,43 @@ void setup() {
 void loop() {
   //read the information from the raspberry pi
   int8_t header;
-  int16_t pitch, roll, yaw, throttle;
-  int16_t raspberryThrottle;
-
+  int16_t pitch, roll, yaw;
+  uint16_t throttle;
+  uint16_t esc_1, esc_2, esc_3, esc_4;
   bool errorCommunication = false;
  
   //read the incoming bytes 
   if (recvDroneMsg(rpiTX, 64)) 
   {
-    lostPakages = 0;
+    lostPackages = 0;
     
     header = rpiTX[0];
     roll = rpiTX[1] | (rpiTX[2] << 8);
     pitch = rpiTX[3] | (rpiTX[4] << 8);
     yaw = rpiTX[5] | (rpiTX[6] << 8);
-    raspberryThrottle = rpiTX[7] | (rpiTX[8] << 8);
+    throttle = rpiTX[7] | (rpiTX[8] << 8);
 
     //the setpoints must be taken from the raspberry pi
     SetpointYaw = (float)yaw;
     SetpointPitch = (float)pitch;
     SetpointRoll = (float)roll;
-
-    throttle = (float)raspberryThrottle;
   }
   else
-    lostPakages++;
+    lostPackages++;
 
   //pakeges lost
-  if(lostPakages > 5)
+  if(lostPackages > 5)
   {
     SetpointYaw = 0;
     SetpointPitch = 0;
     SetpointRoll = 0;
   }
-  if(lostPakages > 40)
+  if(lostPackages > 40)
     throttle = throttle * 0.96; //reduce the throttle speed
 
 
   //this function to read the sensors return the values in degrees per second
-  imu::Vector<3> euler = bno.getVector(Adafruit_BNO055::VECTOR_EULER);
+  imu::Vector<3> euler = (bno.getVector(Adafruit_BNO055::VECTOR_GYROSCOPE) * 180) / PI;
 
   //input values -- taken from the gyroscope
   InputRoll = euler.x();   //Gyro pid input is deg/sec.
@@ -193,10 +196,10 @@ void loop() {
 
   if (throttle > 3072) throttle = 3072;                                   //We need some room to keep full control at full throttle.
 
-  int esc_1 = throttle - OutputPitch + OutputRoll - OutputYaw; //Calculate the pulse for esc 1 (front-right - CCW)
-  int esc_2 = throttle + OutputPitch + OutputRoll + OutputYaw; //Calculate the pulse for esc 2 (rear-right - CW)
-  int esc_3 = throttle + OutputPitch - OutputRoll - OutputYaw; //Calculate the pulse for esc 3 (rear-left - CCW)
-  int esc_4 = throttle - OutputPitch - OutputRoll + OutputYaw; //Calculate the pulse for esc 4 (front-left - CW)
+  esc_1 = throttle - OutputPitch + OutputRoll - OutputYaw; //Calculate the pulse for esc 1 (front-right - CCW)
+  esc_2 = throttle + OutputPitch + OutputRoll + OutputYaw; //Calculate the pulse for esc 2 (rear-right - CW)
+  esc_3 = throttle + OutputPitch - OutputRoll - OutputYaw; //Calculate the pulse for esc 3 (rear-left - CCW)
+  esc_4 = throttle - OutputPitch - OutputRoll + OutputYaw; //Calculate the pulse for esc 4 (front-left - CW)
 
   if (esc_1 < 256) esc_1 = 256;                                         //Keep the motors running.
   if (esc_2 < 256) esc_2 = 256;                                         //Keep the motors running.
