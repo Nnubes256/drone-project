@@ -257,12 +257,29 @@ bool recvDroneMsg(byte* msg, size_t maxLen) {
 }
 
 void setup() {
+  
   //initialize connection with the raspberry pi with the serial port 9600
   Serial.begin(115200);
+
+  pwm.begin();
+  // In theory the internal oscillator is 25MHz but it really isn't
+  // that precise. You can 'calibrate' by tweaking this number till
+  // you get the frequency you're expecting!
+  pwm.setOscillatorFrequency(27000000);  // The int.osc. is closer to 27MHz  
+  pwm.setPWMFreq(50);  // Analog servos run at ~50 Hz updates
+
+  /* Initialise the gyroscope */
+  if (!bno.begin()) {
+    //Serial.print("No gyroscope detected");
+    while (1);
+  }
+  
   //wait for the serial port to be connected
   while (!Serial) {
     ;
   }
+
+  while (!Serial.available()) {}
 
   myPIDRoll.SetOutputLimits(-400, 400);
   myPIDPitch.SetOutputLimits(-400, 400);
@@ -282,26 +299,6 @@ void setup() {
 
   //Turn on the warning led.
   //digitalWrite(12, HIGH);
-
-  /* Initialise the gyroscope */
-  if (!bno.begin()) {
-    Serial.print("No gyroscope detected");
-    while (1);
-  }
-
-  //start the servo motors
-  pwm.begin();
-
-  //set the frecuency of the motors to 50 hz
-  pwm.setOscillatorFrequency(27000000);
-  pwm.setPWMFreq(50);
-  delay(10);
-
-  //turn on the motors in a low throttle
-  setSpeedMotor(0, 1024);
-  setSpeedMotor(1, 1024);
-  setSpeedMotor(2, 1024);
-  setSpeedMotor(3, 1024);
 
   Serial.println("1");
 
@@ -341,7 +338,6 @@ void setup() {
   while (sys == 0) {
     bno.getCalibration(&sys, &gyro, &accel, &mag);
   }
-
 
   /* The data should be ignored until the system calibration is > 0 */
   /*if (!system) { //the system variable is 0 untill the gyroscope is callibrated  --  the calibrating qualitie varies from 0 to 3 being 3 the optimal callibration
@@ -421,16 +417,16 @@ void loop() {
       InputYaw = (InputYaw * 0.7) + (gyro.x() * 0.3);    //Gyro pid input is deg/sec.
     }
 
-    if (!isnan(InputRoll)) { InputRollPrev = gyro.y();   /*Gyro pid input is deg/tick.*/ } else { InputRoll = InputRollPrev; }
-    if (!isnan(InputPitch)) { InputPitchPrev = gyro.z();   /*Gyro pid input is deg/tick.*/ } else { InputPitch = InputPitchPrev; }
-    if (!isnan(InputYaw)) { InputYawPrev = gyro.x();   /*Gyro pid input is deg/tick.*/ } else { InputYaw = InputYawPrev; }
+    if (!isnan(InputRoll)) { InputRollPrev = gyro.y();   /*Gyro pid input is deg/sec.*/ } else { InputRoll = InputRollPrev; }
+    if (!isnan(InputPitch)) { InputPitchPrev = gyro.z();   /*Gyro pid input is deg/sec.*/ } else { InputPitch = InputPitchPrev; }
+    if (!isnan(InputYaw)) { InputYawPrev = gyro.x();   /*Gyro pid input is deg/sec*/ } else { InputYaw = InputYawPrev; }
     uint8_t sys, gyro2, accel, mag;
     sys = gyro2 = accel = mag = 0;
     bno.getCalibration(&sys, &gyro2, &accel, &mag);
-    Serial.println(sys, 4);
-    Serial.println(gyro.x(), 4);
-    Serial.println(InputYaw, 4);
-    Serial.println(InputYawPrev, 4);
+    //Serial.println(sys, 4);
+    //Serial.println(gyro.x(), 4);
+    //Serial.println(InputYaw, 4);
+    //Serial.println(InputYawPrev, 4);
 
     //Serial.println(gyro.y(), 4);
     //Serial.println(gyro.z(), 4);
@@ -667,6 +663,6 @@ void PrintHex8(uint8_t *data, uint8_t length) // prints 8-bit data in hex with l
 
 short unsigned int setSpeedMotor(int n, int speedM){
     int speedMotor = map(speedM , 0, 4096, MinSpeed, MaxSpeed);
-    //pwm.setPWM(n, 0, speedMotor);
+    pwm.setPWM(n, 0, speedMotor);
     return (short)speedMotor;
 }
