@@ -12,8 +12,8 @@
 //ilbrary for controlling the servo motors
 #include <Adafruit_PWMServoDriver.h>
 
-#define MinSpeed 150
-#define MaxSpeed 300
+#define MinSpeed 200
+#define MaxSpeed 400
 
 //communication global variables
 #define START_BYTE 0x4F
