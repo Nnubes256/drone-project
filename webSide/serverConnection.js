@@ -7,7 +7,6 @@ let lowBatteryLED = document.getElementById("lowBatteryLED");
 setTimeout(function(){ alert(lowBatteryLED.style.backgroundColor = "red"); }, 560000);
 
 socket.onopen = function(e) {
-  
 };
 
 socket.onmessage = function(event) {
@@ -41,11 +40,11 @@ socket.onmessage = function(event) {
   var longitude = dataReceived.drone.gps.longitude;
   LongitudeLayer.textContent = longitude;
   AltitudeLayer.textContent = dataReceived.drone.gps.altitude;
-  SpeedLayer.textContent = dataReceived.drone.gps.speed;
   let roll = dataReceived.gamepad.axis_state.roll; 
   PtichLayer.textContent = dataReceived.gamepad.axis_state.pitch;
   RawLayer.textContent = dataReceived.gamepad.axis_state.raw;
   ThrottleLayer.textContent = dataReceived.gamepad.axis_state.throttle;
+  SpeedLayer.textContent = dataReceived.drone.gps.speed;
   angleImage.style.rotate = roll;
   RollLayer.textContent = roll;
 
@@ -63,32 +62,8 @@ socket.onmessage = function(event) {
     dangerousAngleLED.style.backgroundColor = "red";
   else
     dangerousAngleLED.style.backgroundColor = "white";
-      
-    function coordinateFeature(lng, lat) {
-      return {
-        center: [lng, lat],
-        geometry: {
-        type: 'Point',
-        coordinates: [lng, lat]
-        },
-        place_name: 'Lat: ' + lat + ' Lng: ' + lng,
-        place_type: ['coordinate'],
-        properties: {},
-        type: 'Feature'
-      };
-    }
     
-    geocodes.push(coordinateFeature(23, 23));
-    
-    map.addControl(
-      new MapboxGeocoder({
-        accessToken: mapboxgl.accessToken,
-        localGeocoder: coordinatesGeocoder,
-        zoom: 4,
-        placeholder: 'Try: -40, 170',
-        mapboxgl: mapboxgl
-      })
-    );
+  map.setCenter([altitude, longitude]);
 };
 
 socket.onclose = function(event) {
@@ -103,45 +78,4 @@ socket.onclose = function(event) {
 
 socket.onerror = function(error) {
   alert(`[error] ${error.message}`);
-};
-
-
-
-var coordinatesGeocoder = function(Longitude, latitude) {
-                            
-  function coordinateFeature(lng, lat) {
-      return {
-          center: [lng, lat],
-          geometry: {
-          type: 'Point',
-          coordinates: [lng, lat]
-          },
-          place_name: 'Lat: ' + lat + ' Lng: ' + lng,
-          place_type: ['coordinate'],
-          properties: {},
-          type: 'Feature'
-      };
-  }
-
-  var coord1 = Longitude;
-  var coord2 = latitude;
-  var geocodes = [];
-  
-  if (coord1 < -90 || coord1 > 90) {
-      // must be lng, lat
-      geocodes.push(coordinateFeature(coord1, coord2));
-  }
-  
-  if (coord2 < -90 || coord2 > 90) {
-      // must be lat, lng
-      geocodes.push(coordinateFeature(coord2, coord1));
-  }
-  
-  if (geocodes.length === 0) {
-      // else could be either lng, lat or lat, lng
-      geocodes.push(coordinateFeature(coord1, coord2));
-      geocodes.push(coordinateFeature(coord2, coord1));
-  }
-  
-  return geocodes;
 };
