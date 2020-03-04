@@ -37,6 +37,8 @@ int lostPakages = 0;
 byte* rpiTX;
 byte* rpiTXBack;
 
+bool firstLoop = false;
+
 short int counter = 0;
 
 typedef union { //data structure used for the communication (transforms a float variable into an array of bytes due to the way the data is stored)
@@ -70,6 +72,7 @@ short unsigned int setSpeedMotor(int n, int speedM);
 void sendDroneMsg(byte* msg, size_t len);
 bool recvDroneMsg(byte* msg, size_t maxLen);
 void emergencyLanding();
+void quatToEuler(imu::Vector<3> *output, imu::Quaternion *input);
 
 void setup() {
   rpiTX = (byte*) calloc(64, sizeof(byte));  //reserve 64 bytes of memory in the variable to be readed from the serial port
@@ -155,12 +158,55 @@ void loop() {
     raspberryThrottle = ((uint16_t) rpiTX[6]) | (((uint16_t) rpiTX[7]) << 8);
 
     //the setpoints must be taken from the raspberry pi
-    SetpointYaw = (float)yaw;
-    SetpointPitch = (float)pitch;
-    SetpointRoll = (float)roll;
+    //SetpointYaw = (float)yaw;
+    //SetpointPitch = (float)pitch;
+    //SetpointRoll = (float)roll;
   }
   else
     lostPakages++;
+
+  imu::Quaternion quaternion = bno.getQuat();
+  imu::Vector<3> angle = imu::Vector<3>(0,0,0);
+  quatToEuler(&angle, &quaternion);
+  imu::Vector<3> gyro = (bno.getVector(Adafruit_BNO055::VECTOR_GYROSCOPE));
+
+  // TODO test this new code
+  //input values -- taken from the gyroscope
+  // /w angle correction
+  if (firstLoop) {
+    InputRoll = gyro.y();
+    InputPitch = gyro.z();
+    InputYaw = gyro.x();
+  } else {
+    InputRoll = (InputRoll * 0.7) + (gyro.y() * 0.3);   //Gyro pid input is deg/sec --> we substract from the previous measurement to get it
+    InputPitch = (InputPitch * 0.7) + (gyro.z() * 0.3);  //Gyro pid input is deg/sec.
+    InputYaw = (InputYaw * 0.7) + (gyro.x() * 0.3);    //Gyro pid input is deg/sec.
+  }
+
+  firstLoop = false;
+
+  SetpointYaw = 0;
+  SetpointPitch = 0;
+  SetpointRoll = 0;
+  // We also add a certain amount of deadband, in order to improve flight
+  if (yaw < 2040 || yaw > 2054) {
+    int16_t deadzoneCorr = 0;
+    if (yaw > 2054) { deadzoneCorr = 2054; }
+    else if (yaw < 2040) { deadzoneCorr = 2040; }
+    SetpointYaw =  ((double) (yaw - deadzoneCorr)) / 6.19;
+  }
+  if (pitch < 2040 || pitch > 2054) {
+    int16_t deadzoneCorr = 0;
+    if (pitch > 2054) { deadzoneCorr = 2054; }
+    else if (pitch < 2040) { deadzoneCorr = 2040; }
+    SetpointPitch = (((double) (pitch - deadzoneCorr)) - (angle.z() * 30.72)) / 6.19;
+  }
+  if (roll < 2040 || roll > 2054) {
+    int16_t deadzoneCorr = 0;
+    if (roll > 2054) { deadzoneCorr = 2054; }
+    else if (roll < 2040) { deadzoneCorr = 2040; }
+    SetpointRoll = (((double) (roll - deadzoneCorr)) - (angle.y() * 30.72)) / 6.19;
+  }
 
   //pakeges lost
   if(lostPakages > 5)
@@ -193,10 +239,10 @@ void loop() {
   int esc_3 = throttle + (int16_t)OutputPitch - (int16_t)OutputRoll - (int16_t)OutputYaw; //Calculate the pulse for esc 3 (rear-left - CCW)
   int esc_4 = throttle - (int16_t)OutputPitch - (int16_t)OutputRoll + (int16_t)OutputYaw; //Calculate the pulse for esc 4 (front-left - CW)
 
-  if (esc_1 < 256) esc_1 = 256;                                         //Keep the motors running.
-  if (esc_2 < 256) esc_2 = 256;                                         //Keep the motors running.
-  if (esc_3 < 256) esc_3 = 256;                                         //Keep the motors running.
-  if (esc_4 < 256) esc_4 = 256;                                         //Keep the motors running.
+  if (esc_1 < 1024) esc_1 = 256;                                         //Keep the motors running.
+  if (esc_2 < 1024) esc_2 = 256;                                         //Keep the motors running.
+  if (esc_3 < 1024) esc_3 = 256;                                         //Keep the motors running.
+  if (esc_4 < 1024) esc_4 = 256;                                         //Keep the motors running.
 
   if (esc_1 > 3072)esc_1 = 3072;                                          //Limit the esc-1 pulse.
   if (esc_2 > 3072)esc_2 = 3072;                                          //Limit the esc-2 pulse.
@@ -286,6 +332,19 @@ short unsigned int setSpeedMotor(int n, int speedM){
     return (short)speedMotor;
 }
 
+
+//gyroscope functions
+
+void quatToEuler(imu::Vector<3> *output, imu::Quaternion *input) {
+  double w = input->w();
+  double x = input->x();
+  double y = input->y();
+  double z = input->z();
+
+  output->x() = atan2(2.0 * (z * y + w * x) , 1.0 - 2.0 * (x * x + y * y));
+  output->y() = asin(2.0 * (y * w - z * x));
+  output->z() = atan2(2.0 * (z * w + x * y) , - 1.0 + 2.0 * (w * w + x * x));
+}
 
 //communication functions
 
