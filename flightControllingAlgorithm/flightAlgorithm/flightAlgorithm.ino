@@ -17,8 +17,8 @@
 #define MaxSpeed 400
 
 //communication global variables
-#define START_BYTE 0x4F
-#define END_BYTE 0x4F
+#define START_BYTE 0x9F
+#define END_BYTE 0x8F
 #define ESCAPE_BYTE 0x7F
 
 #define S_WAITING_HEADER 0
@@ -80,7 +80,7 @@ void setup() {
     }
 
   //initialize connection with the raspberry pi with the serial port 9600
-  Serial.begin(9600);
+  Serial.begin(115200);
   //wait for the serial port to be connected
   while (!Serial) {
     ;
