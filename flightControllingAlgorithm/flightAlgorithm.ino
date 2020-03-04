@@ -1,3 +1,5 @@
+
+  
 //PID algorithm library
 #include <PID_v1.h>
 
@@ -12,12 +14,12 @@
 //ilbrary for controlling the servo motors
 #include <Adafruit_PWMServoDriver.h>
 
-#define MinSpeed 150
-#define MaxSpeed 300
+#define MinSpeed 200
+#define MaxSpeed 400
 
 //communication global variables
-#define START_BYTE 0x4F
-#define END_BYTE 0x4F
+#define START_BYTE 0x9F
+#define END_BYTE 0x8F
 #define ESCAPE_BYTE 0x7F
 
 #define S_WAITING_HEADER 0
@@ -30,7 +32,7 @@ sensors_event_t event;  //this variable contains the values of the gyroscope axi
 //variable to be received from the serial port
 int incomingByte = 0; // for incoming serial data
 
-int lostPakages;
+int lostPakages = 0;
 
 byte* rpiTX;
 byte* rpiTXBack;
@@ -79,7 +81,7 @@ void setup() {
     }
 
   //initialize connection with the raspberry pi with the serial port 9600
-  Serial.begin(9600);
+  Serial.begin(115200);
   //wait for the serial port to be connected
   while (!Serial) {
     ;
@@ -119,11 +121,14 @@ void setup() {
   //the giroscope calibration -- the gyroscope should not be used until the system values is greater than 1
   uint8_t systemm, gyro, accel, mag;
   systemm = gyro = accel = mag = 0;
+
+  bno.setExtCrystalUse(true);
+  
   bno.getCalibration(&systemm, &gyro, &accel, &mag);
 
   /* The data should be ignored until the system calibration is > 0 */
-  if (!systemm) { //the system variable is 0 untill the gyroscope is callibrated  --  the calibrating qualitie varies from 0 to 3 being 3 the optimal callibration
-    while (1); //this line is for the system not to execute if the values of the gyroscope are wrong -- remove if in doesn't work
+  while (!systemm){
+    bno.getCalibration(&systemm, &gyro, &accel, &mag);
   }
 
   //When everything is done, turn off the led.
@@ -144,17 +149,15 @@ void loop() {
     lostPakages = 0;
     
     header = rpiTX[0];
-    roll = rpiTX[1] | (rpiTX[2] << 8);
-    pitch = rpiTX[3] | (rpiTX[4] << 8);
-    yaw = rpiTX[5] | (rpiTX[6] << 8);
-    raspberryThrottle = rpiTX[7] | (rpiTX[8] << 8);
+    roll = ((int16_t) rpiTX[0]) | (((int16_t) rpiTX[1]) << 8);
+    pitch = ((int16_t) rpiTX[2]) | (((int16_t) rpiTX[3]) << 8);
+    yaw = ((int16_t) rpiTX[4]) | (((int16_t) rpiTX[5]) << 8);
+    raspberryThrottle = ((uint16_t) rpiTX[6]) | (((uint16_t) rpiTX[7]) << 8);
 
     //the setpoints must be taken from the raspberry pi
     SetpointYaw = (float)yaw;
     SetpointPitch = (float)pitch;
     SetpointRoll = (float)roll;
-
-    throttle = (float)raspberryThrottle;
   }
   else
     lostPakages++;
@@ -171,7 +174,7 @@ void loop() {
 
 
   //this function to read the sensors return the values in degrees per second
-  imu::Vector<3> euler = bno.getVector(Adafruit_BNO055::VECTOR_EULER);
+  imu::Vector<3> euler = (bno.getVector(Adafruit_BNO055::VECTOR_GYROSCOPE) * 180) / PI;
 
   //input values -- taken from the gyroscope
   InputRoll = euler.x();   //Gyro pid input is deg/sec.
@@ -185,10 +188,10 @@ void loop() {
 
   if (throttle > 3072) throttle = 3072;                                   //We need some room to keep full control at full throttle.
 
-  int esc_1 = throttle - OutputPitch + OutputRoll - OutputYaw; //Calculate the pulse for esc 1 (front-right - CCW)
-  int esc_2 = throttle + OutputPitch + OutputRoll + OutputYaw; //Calculate the pulse for esc 2 (rear-right - CW)
-  int esc_3 = throttle + OutputPitch - OutputRoll - OutputYaw; //Calculate the pulse for esc 3 (rear-left - CCW)
-  int esc_4 = throttle - OutputPitch - OutputRoll + OutputYaw; //Calculate the pulse for esc 4 (front-left - CW)
+  int esc_1 = throttle - (int16_t)OutputPitch + (int16_t)OutputRoll - (int16_t)OutputYaw; //Calculate the pulse for esc 1 (front-right - CCW)
+  int esc_2 = throttle + (int16_t)OutputPitch + (int16_t)OutputRoll + (int16_t)OutputYaw; //Calculate the pulse for esc 2 (rear-right - CW)
+  int esc_3 = throttle + (int16_t)OutputPitch - (int16_t)OutputRoll - (int16_t)OutputYaw; //Calculate the pulse for esc 3 (rear-left - CCW)
+  int esc_4 = throttle - (int16_t)OutputPitch - (int16_t)OutputRoll + (int16_t)OutputYaw; //Calculate the pulse for esc 4 (front-left - CW)
 
   if (esc_1 < 256) esc_1 = 256;                                         //Keep the motors running.
   if (esc_2 < 256) esc_2 = 256;                                         //Keep the motors running.
@@ -208,61 +211,69 @@ void loop() {
   //send to the raspberry pi the new values of the motors
 
   for(int i = 0 ; i < 64 ; i++) //initialize the arrays of bytes to zero
-    rpiTXBack[i] = 0x00;
-  
-  byte headerToRP = 0x4F;
-  rpiTXBack[0] = headerToRP;
-  
-  counter++;
+    rpiTXBack[i] = 0x01;
+    
   rpiTXBack[1] = (counter >> 8) & 0xFF;
-  rpiTXBack[2] = counter & 0xFF;
-  
+  rpiTXBack[0] = counter & 0xFF;
+  counter++;
+
+  rpiTXBack[2] = esc_4 & 0xFF;
+  rpiTXBack[3] = (esc_4 >> 8) & 0xFF;
+  rpiTXBack[4] = esc_1 & 0xFF;
+  rpiTXBack[5] = (esc_1 >> 8) & 0xFF;
+  rpiTXBack[6] = esc_3 & 0xFF;
+  rpiTXBack[7] = (esc_3 >> 8) & 0xFF;
+  rpiTXBack[8] = esc_2 & 0xFF;
+  rpiTXBack[9] = (esc_2 >> 8) & 0xFF;
+
   floatAsBytes axisX, axisY, axisZ, axisW;
   floatAsBytes accelerometerAxisX, accelerometerAxisY, accelerometerAxisZ;
 
   imu::Quaternion quat = bno.getQuat();
-  axisW.fval = (float) quat.w();
-  rpiTXBack[3] = axisW.bval[3];
-  rpiTXBack[4] = axisW.bval[2];
-  rpiTXBack[5] = axisW.bval[1];
-  rpiTXBack[6] = axisW.bval[0];
-  
-  axisY.fval = (float) quat.y();
-  rpiTXBack[7] = axisY.bval[3];
-  rpiTXBack[8] = axisY.bval[2];
-  rpiTXBack[9] = axisY.bval[1];
-  rpiTXBack[10] = axisY.bval[0];
-  
-  axisX.fval = (float) quat.x();
-  rpiTXBack[11] = axisX.bval[3];
-  rpiTXBack[12] = axisX.bval[2];
-  rpiTXBack[13] = axisX.bval[1];
-  rpiTXBack[14] = axisX.bval[0];
-  
-  axisZ.fval = (float) quat.z();
-  rpiTXBack[15] = axisZ.bval[3];
-  rpiTXBack[16] = axisZ.bval[2];
-  rpiTXBack[17] = axisZ.bval[1];
-  rpiTXBack[18] = axisZ.bval[0];
 
-  imu::Vector<3> accelerometer = bno.getVector(Adafruit_BNO055::VECTOR_ACCELEROMETER);
-  accelerometerAxisX.fval = accelerometer.x();
-  rpiTXBack[19] = accelerometerAxisX.bval[3];
-  rpiTXBack[20] = accelerometerAxisX.bval[2];
-  rpiTXBack[21] = accelerometerAxisX.bval[1];
-  rpiTXBack[22] = accelerometerAxisX.bval[0];
-  
-  accelerometerAxisY.fval = accelerometer.y();
-  rpiTXBack[23] = accelerometerAxisY.bval[3];
-  rpiTXBack[24] = accelerometerAxisY.bval[2];
-  rpiTXBack[25] = accelerometerAxisY.bval[1];
-  rpiTXBack[26] = accelerometerAxisY.bval[0];
-  
-  accelerometerAxisZ.fval = accelerometer.z();
-  rpiTXBack[27] = accelerometerAxisZ.bval[3];
-  rpiTXBack[28] = accelerometerAxisZ.bval[2];
-  rpiTXBack[29] = accelerometerAxisZ.bval[1];
-  rpiTXBack[30] = accelerometerAxisZ.bval[0];
+  axisW.fval = (float) quat.w();
+  rpiTXBack[10] = axisW.bval[0];
+  rpiTXBack[11] = axisW.bval[1];
+  rpiTXBack[12] = axisW.bval[2];
+  rpiTXBack[13] = axisW.bval[3];
+
+  axisX.fval = (float) quat.x();
+  rpiTXBack[14] = axisX.bval[0];
+  rpiTXBack[15] = axisX.bval[1];
+  rpiTXBack[16] = axisX.bval[2];
+  rpiTXBack[17] = axisX.bval[3];
+
+  axisX.fval = (float) quat.x();
+  rpiTXBack[18] = axisY.bval[0];
+  rpiTXBack[19] = axisY.bval[1];
+  rpiTXBack[20] = axisY.bval[2];
+  rpiTXBack[21] = axisY.bval[3];
+
+  axisZ.fval = (float) quat.z();
+  rpiTXBack[22] = axisZ.bval[0];
+  rpiTXBack[23] = axisZ.bval[1];
+  rpiTXBack[24] = axisZ.bval[2];
+  rpiTXBack[25] = axisZ.bval[3];
+
+  imu::Vector<3> accelerometer = bno.getVector(Adafruit_BNO055::VECTOR_LINEARACCEL);
+  accelerometerAxisX.fval = (float) accelerometer.x();
+  rpiTXBack[26] = accelerometerAxisX.bval[0];
+  rpiTXBack[27] = accelerometerAxisX.bval[1];
+  rpiTXBack[28] = accelerometerAxisX.bval[2];
+  rpiTXBack[29] = accelerometerAxisX.bval[3];
+
+  accelerometerAxisY.fval = (float) accelerometer.y();
+  rpiTXBack[30] = accelerometerAxisY.bval[0];
+  rpiTXBack[31] = accelerometerAxisY.bval[1];
+  rpiTXBack[32] = accelerometerAxisY.bval[2];
+  rpiTXBack[33] = accelerometerAxisY.bval[3];
+
+  accelerometerAxisZ.fval = (float) accelerometer.z();
+  rpiTXBack[34] = accelerometerAxisZ.bval[0];
+  rpiTXBack[35] = accelerometerAxisZ.bval[1];
+  rpiTXBack[36] = accelerometerAxisZ.bval[2];
+  rpiTXBack[37] = accelerometerAxisZ.bval[3];
+
 
   //send data back to the raspberry pi
   sendDroneMsg(rpiTXBack, 64);
@@ -275,6 +286,7 @@ short unsigned int setSpeedMotor(int n, int speedM){
     return (short)speedMotor;
 }
 
+
 //communication functions
 
 //send data to the serial port
@@ -282,14 +294,20 @@ void sendDroneMsg(byte* msg, size_t len) {
   uint16_t crc = 0;
   Serial.write(START_BYTE); // Write message start byte
   for (int i = 0; i < len; i++) {
-    if (msg[i] == END_BYTE || msg[i] == ESCAPE_BYTE) { // If message byte is equal to end byte, it gets escaped
+    if (msg[i] == END_BYTE || msg[i] == ESCAPE_BYTE) {
       Serial.write(ESCAPE_BYTE);
     }
     Serial.write(msg[i]);
     crc = _crc16_update(crc, msg[i]);
   }
+  if ((crc & 0xFF) == END_BYTE || (crc & 0xFF) == ESCAPE_BYTE) {
+    Serial.write(ESCAPE_BYTE);
+  }
   Serial.write(crc & 0xFF);
-  Serial.write((crc << 8) & 0xFF);
+  if (((crc >> 8) & 0xFF) == END_BYTE || ((crc >> 8) & 0xFF) == ESCAPE_BYTE) {
+    Serial.write(ESCAPE_BYTE);
+  }
+  Serial.write((crc >> 8) & 0xFF);
   Serial.write(END_BYTE); // Write message end byte
 }
 
@@ -304,9 +322,10 @@ bool recvDroneMsg(byte* msg, size_t maxLen) {
   // Receive loop
   while (tries > 0 && bytesParsed <= maxLen + 1 && !doneParsing) {
     // Read from serial
+    //Serial.write("GET");
     parsedByte = Serial.read();
-    if (parsedByte == -1) { // Avoid blocking by identifying lack of messages
-      tries--;
+    if (parsedByte == 255 || parsedByte == -1) { // Avoid blocking by identifying lack of messages
+      tries -= 1;
     } else {
       switch (state) {
         case S_WAITING_HEADER: // We are waiting for a header
@@ -351,6 +370,7 @@ bool recvDroneMsg(byte* msg, size_t maxLen) {
   if (expectedCRC != obtainedCRC) {
     return false;
   }
+
   return true;
 }
 
