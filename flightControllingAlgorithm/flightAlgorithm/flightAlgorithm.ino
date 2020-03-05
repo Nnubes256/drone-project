@@ -152,7 +152,7 @@ void loop() {
   uint16_t raspberryThrottle = 1024;
 
   bool errorCommunication = false;
- 
+  
   //read the incoming bytes 
   if (recvDroneMsg(rpiTX, 64)) 
   {
@@ -171,95 +171,109 @@ void loop() {
   }
   else
     lostPakages++;
-
-  imu::Quaternion quaternion = bno.getQuat();
-  imu::Vector<3> angle = imu::Vector<3>(0,0,0);
-  quatToEuler(&angle, &quaternion);
-  imu::Vector<3> gyro = (bno.getVector(Adafruit_BNO055::VECTOR_GYROSCOPE));
-
-  // TODO test this new code
-  //input values -- taken from the gyroscope
-  // /w angle correction
-  if (firstLoop) {
-    InputRoll = gyro.x();
-    InputPitch = -gyro.y();
-    InputYaw = gyro.z();
-  } else {
-    InputRoll = (InputRoll * 0.7) + (gyro.x() * 0.3);   //Gyro pid input is deg/sec --> we substract from the previous measurement to get it
-    InputPitch = (InputPitch * 0.7) + (-gyro.y() * 0.3);  //Gyro pid input is deg/sec.
-    InputYaw = (InputYaw * 0.7) + (gyro.z() * 0.3);    //Gyro pid input is deg/sec.
+  
+  uint16_t esc_1;
+  uint16_t esc_2;
+  uint16_t esc_3;
+  uint16_t esc_4;
+  
+  if(raspberryThrottle == 1024){
+    esc_1 = 1024;
+    esc_2 = 1024;
+    esc_3 = 1024;
+    esc_4 = 1024;
   }
+  else{
 
-  if (!isnan(InputRoll)) { InputRollPrev = gyro.x();   /*Gyro pid input is deg/sec.*/ } else { InputRoll = InputRollPrev; }
-  if (!isnan(InputPitch)) { InputPitchPrev = -gyro.y();   /*Gyro pid input is deg/sec.*/ } else { InputPitch = InputPitchPrev; }
-  if (!isnan(InputYaw)) { InputYawPrev = gyro.z();   /*Gyro pid input is deg/sec*/ } else { InputYaw = InputYawPrev; }
+    imu::Quaternion quaternion = bno.getQuat();
+    imu::Vector<3> angle = imu::Vector<3>(0,0,0);
+    quatToEuler(&angle, &quaternion);
+    imu::Vector<3> gyro = (bno.getVector(Adafruit_BNO055::VECTOR_GYROSCOPE));
 
-  firstLoop = false;
-
-  Serial.println(angle.x());
-  Serial.println(angle.y());
-
-  SetpointYaw = 0;
-  SetpointPitch = 0;
-  SetpointRoll = 0;
-  // We also add a certain amount of deadband, in order to improve flight
-    if (yaw < 2040 || yaw > 2054) {
-      int16_t deadzoneCorr = 0;
-      if (yaw > 2054) { deadzoneCorr = 2054; }
-      else if (yaw < 2040) { deadzoneCorr = 2040; }
-      //Serial.println(yaw - deadzoneCorr);
-      SetpointYaw =  ((double) (yaw - deadzoneCorr)) / 6.19;
-    }
-    if (pitch < 2040 || pitch > 2054) {
-      int16_t deadzoneCorr = 0;
-      if (pitch > 2054) { deadzoneCorr = 2054; }
-      else if (pitch < 2040) { deadzoneCorr = 2040; }
-      //Serial.println((euler.z() * 30.72), 4);
-      SetpointPitch = (((double) (pitch - deadzoneCorr)) - (-angle.y() * 30.72)) / 6.19;
-    }
-    if (roll < 2040 || roll > 2054) {
-      int16_t deadzoneCorr = 0;
-      if (roll > 2054) { deadzoneCorr = 2054; }
-      else if (roll < 2040) { deadzoneCorr = 2040; }
-      SetpointRoll = (((double) (roll - deadzoneCorr)) - (angle.x() * 30.72)) / 6.19;
+    // TODO test this new code
+    //input values -- taken from the gyroscope
+    // /w angle correction
+    if (firstLoop) {
+      InputRoll = gyro.x();
+      InputPitch = -gyro.y();
+      InputYaw = gyro.z();
+    } else {
+      InputRoll = (InputRoll * 0.7) + (gyro.x() * 0.3);   //Gyro pid input is deg/sec --> we substract from the previous measurement to get it
+      InputPitch = (InputPitch * 0.7) + (-gyro.y() * 0.3);  //Gyro pid input is deg/sec.
+      InputYaw = (InputYaw * 0.7) + (gyro.z() * 0.3);    //Gyro pid input is deg/sec.
     }
 
-  //pakeges lost
- /* if(lostPakages > 5)
-  {
+    if (!isnan(InputRoll)) { InputRollPrev = gyro.x();   /*Gyro pid input is deg/sec.*/ } else { InputRoll = InputRollPrev; }
+    if (!isnan(InputPitch)) { InputPitchPrev = -gyro.y();   /*Gyro pid input is deg/sec.*/ } else { InputPitch = InputPitchPrev; }
+    if (!isnan(InputYaw)) { InputYawPrev = gyro.z();   /*Gyro pid input is deg/sec*/ } else { InputYaw = InputYawPrev; }
+
+    firstLoop = false;
+
+    Serial.println(angle.x());
+    Serial.println(angle.y());
+
     SetpointYaw = 0;
     SetpointPitch = 0;
     SetpointRoll = 0;
+    // We also add a certain amount of deadband, in order to improve flight
+      if (yaw < 2040 || yaw > 2054) {
+        int16_t deadzoneCorr = 0;
+        if (yaw > 2054) { deadzoneCorr = 2054; }
+        else if (yaw < 2040) { deadzoneCorr = 2040; }
+        //Serial.println(yaw - deadzoneCorr);
+        SetpointYaw =  ((double) (yaw - deadzoneCorr)) / 6.19;
+      }
+      if (pitch < 2040 || pitch > 2054) {
+        int16_t deadzoneCorr = 0;
+        if (pitch > 2054) { deadzoneCorr = 2054; }
+        else if (pitch < 2040) { deadzoneCorr = 2040; }
+        //Serial.println((euler.z() * 30.72), 4);
+        SetpointPitch = (((double) (pitch - deadzoneCorr)) - (-angle.y() * 30.72)) / 6.19;
+      }
+      if (roll < 2040 || roll > 2054) {
+        int16_t deadzoneCorr = 0;
+        if (roll > 2054) { deadzoneCorr = 2054; }
+        else if (roll < 2040) { deadzoneCorr = 2040; }
+        SetpointRoll = (((double) (roll - deadzoneCorr)) - (angle.x() * 30.72)) / 6.19;
+      }
+
+    //pakeges lost
+   /* if(lostPakages > 5)
+    {
+      SetpointYaw = 0;
+      SetpointPitch = 0;
+      SetpointRoll = 0;
+    }
+    if(lostPakages > 40)
+      raspberryThrottle = raspberryThrottle * 0.96; //reduce the throttle speed
+  */
+    //Calcuate the PID
+    myPIDRoll.Compute();
+    myPIDYaw.Compute();
+    myPIDPitch.Compute();
+
+    if (raspberryThrottle > 3072) raspberryThrottle = 3072;                                   //We need some room to keep full control at full throttle.
+
+    uint16_t esc_1 = raspberryThrottle - (int16_t)OutputPitch + (int16_t)OutputRoll - (int16_t)OutputYaw; //Calculate the pulse for esc 1 (front-right - CCW)
+    uint16_t esc_2 = raspberryThrottle + (int16_t)OutputPitch + (int16_t)OutputRoll + (int16_t)OutputYaw; //Calculate the pulse for esc 2 (rear-right - CW)
+    uint16_t esc_3 = raspberryThrottle + (int16_t)OutputPitch - (int16_t)OutputRoll - (int16_t)OutputYaw; //Calculate the pulse for esc 3 (rear-left - CCW)
+    uint16_t esc_4 = raspberryThrottle - (int16_t)OutputPitch - (int16_t)OutputRoll + (int16_t)OutputYaw; //Calculate the pulse for esc 4 (front-left - CW)
+
+    Serial.println(angle.x());
+    Serial.println(angle.y());
+    Serial.println(angle.x());
+    Serial.println(angle.y());
+
+    if (esc_1 < 1024) esc_1 = 1024;                                         //Keep the motors running.
+    if (esc_2 < 1024) esc_2 = 1024;                                         //Keep the motors running.
+    if (esc_3 < 1024) esc_3 = 1024;                                         //Keep the motors running.
+    if (esc_4 < 1024) esc_4 = 1024;                                         //Keep the motors running.
+
+    if (esc_1 > 2500)esc_1 = 3072;                                          //Limit the esc-1 pulse.
+    if (esc_2 > 2500)esc_2 = 3072;                                          //Limit the esc-2 pulse.
+    if (esc_3 > 2500)esc_3 = 3072;                                          //Limit the esc-3 pulse.
+    if (esc_4 > 2500)esc_4 = 3072;                                          //Limit the esc-4 pulse.
   }
-  if(lostPakages > 40)
-    raspberryThrottle = raspberryThrottle * 0.96; //reduce the throttle speed
-*/
-  //Calcuate the PID
-  myPIDRoll.Compute();
-  myPIDYaw.Compute();
-  myPIDPitch.Compute();
-
-  if (raspberryThrottle > 3072) raspberryThrottle = 3072;                                   //We need some room to keep full control at full throttle.
-
-  uint16_t esc_1 = raspberryThrottle - (int16_t)OutputPitch + (int16_t)OutputRoll - (int16_t)OutputYaw; //Calculate the pulse for esc 1 (front-right - CCW)
-  uint16_t esc_2 = raspberryThrottle + (int16_t)OutputPitch + (int16_t)OutputRoll + (int16_t)OutputYaw; //Calculate the pulse for esc 2 (rear-right - CW)
-  uint16_t esc_3 = raspberryThrottle + (int16_t)OutputPitch - (int16_t)OutputRoll - (int16_t)OutputYaw; //Calculate the pulse for esc 3 (rear-left - CCW)
-  uint16_t esc_4 = raspberryThrottle - (int16_t)OutputPitch - (int16_t)OutputRoll + (int16_t)OutputYaw; //Calculate the pulse for esc 4 (front-left - CW)
-
-  Serial.println(angle.x());
-  Serial.println(angle.y());
-  Serial.println(angle.x());
-  Serial.println(angle.y());
-  
-  if (esc_1 < 1024) esc_1 = 1024;                                         //Keep the motors running.
-  if (esc_2 < 1024) esc_2 = 1024;                                         //Keep the motors running.
-  if (esc_3 < 1024) esc_3 = 1024;                                         //Keep the motors running.
-  if (esc_4 < 1024) esc_4 = 1024;                                         //Keep the motors running.
-
-  if (esc_1 > 2500)esc_1 = 3072;                                          //Limit the esc-1 pulse.
-  if (esc_2 > 2500)esc_2 = 3072;                                          //Limit the esc-2 pulse.
-  if (esc_3 > 2500)esc_3 = 3072;                                          //Limit the esc-3 pulse.
-  if (esc_4 > 2500)esc_4 = 3072;                                          //Limit the esc-4 pulse.
 
   while(micros() - loop_timer < 20000);                                      //We wait until 20000us are passed.
   loop_timer = micros();
