@@ -46,7 +46,7 @@ short int counter = 0;
 double SetpointRoll, InputRoll, OutputRoll, InputRollPrev = 0.0;
 
 //Specify the links and initial tuning parameters
-double Kp = 1.3, Ki = 0.04, Kd = 18.0;
+double Kp = 20, Ki = 0, Kd = 0;
 PID myPIDRoll(&InputRoll, &OutputRoll, &SetpointRoll, Kp, Ki, Kd, DIRECT);
 
 //Define Variables we'll be connecting to
@@ -54,7 +54,7 @@ double SetpointPitch, InputPitch, OutputPitch, InputPitchPrev = 0.0;
 PID myPIDPitch(&InputPitch, &OutputPitch, &SetpointPitch, Kp, Ki, Kd, DIRECT);
 
 //Define Variables we'll be connecting to
-double yawKp = 4.0, yawKi = 0.02, yawKd = 0;
+double yawKp = 30, yawKi = 0, yawKd = 0;
 double SetpointYaw, InputYaw, OutputYaw, InputYawPrev = 0.0;
 PID myPIDYaw(&InputYaw, &OutputYaw, &SetpointYaw, yawKp, yawKi, yawKd, DIRECT);
 
@@ -270,16 +270,16 @@ void setup() {
 
   /* Initialise the gyroscope */
   if (!bno.begin()) {
-    //Serial.print("No gyroscope detected");
+    Serial.print("No gyroscope detected");
     while (1);
   }
   
   //wait for the serial port to be connected
   while (!Serial) {
-    ;
+    analogWrite(LED_BUILTIN, !analogRead(LED_BUILTIN));
   }
 
-  while (!Serial.available()) {}
+  //while (!Serial.available()) {}
 
   myPIDRoll.SetOutputLimits(-400, 400);
   myPIDPitch.SetOutputLimits(-400, 400);
@@ -382,9 +382,9 @@ void loop() {
 
     if (!msgRecv) {
       //do something
-      roll = 0;
-      pitch = 0;
-      yaw = 0;
+      roll = 2048;
+      pitch = 2048;
+      yaw = 2048;
       raspberryThrottle = 1050;
     } else {
       roll = ((int16_t) rpiTX[0]) | (((int16_t) rpiTX[1]) << 8);
@@ -402,19 +402,19 @@ void loop() {
     imu::Quaternion quat = bno.getQuat();
     imu::Vector<3> angle = imu::Vector<3>(0,0,0);
     quatToEuler(&angle, &quat);
-    imu::Vector<3> gyro = (bno.getVector(Adafruit_BNO055::VECTOR_GYROSCOPE) * 180) / PI;
+    imu::Vector<3> gyro = bno.getVector(Adafruit_BNO055::VECTOR_GYROSCOPE);
 
     // TODO test this new code
     //input values -- taken from the gyroscope
     // /w angle correction
     if (firstRun) {
-      InputRoll = gyro.y();
-      InputPitch = gyro.z();
-      InputYaw = gyro.x();
+      InputRoll = gyro.x();
+      InputPitch = -gyro.y();
+      InputYaw = gyro.z();
     } else {
-      InputRoll = (InputRoll * 0.7) + (gyro.y() * 0.3);   //Gyro pid input is deg/sec --> we substract from the previous measurement to get it
-      InputPitch = (InputPitch * 0.7) + (gyro.z() * 0.3);  //Gyro pid input is deg/sec.
-      InputYaw = (InputYaw * 0.7) + (gyro.x() * 0.3);    //Gyro pid input is deg/sec.
+      InputRoll = (InputRoll * 0.7) + (gyro.x() * 0.3);   //Gyro pid input is deg/sec --> we substract from the previous measurement to get it
+      InputPitch = (InputPitch * 0.7) + (-gyro.y() * 0.3);  //Gyro pid input is deg/sec.
+      InputYaw = (InputYaw * 0.7) + (gyro.z() * 0.3);    //Gyro pid input is deg/sec.
     }
 
     if (!isnan(InputRoll)) { InputRollPrev = gyro.y();   /*Gyro pid input is deg/sec.*/ } else { InputRoll = InputRollPrev; }
@@ -500,9 +500,10 @@ void loop() {
     esc_2 = raspberryThrottle + (int16_t) OutputPitch + (int16_t) OutputRoll + (int16_t) OutputYaw; //Calculate the pulse for esc 2 (rear-right - CW)
     esc_3 = raspberryThrottle + (int16_t) OutputPitch - (int16_t) OutputRoll - (int16_t) OutputYaw; //Calculate the pulse for esc 3 (rear-left - CCW)
     esc_4 = raspberryThrottle - (int16_t) OutputPitch - (int16_t) OutputRoll + (int16_t) OutputYaw; //Calculate the pulse for esc 4 (front-left - CW)
-    
-    Serial.println(SetpointYaw, 4);
-    Serial.println(OutputYaw, 4);
+
+    Serial.println(InputRoll, 4);
+    Serial.println(SetpointRoll, 4);
+    Serial.println(OutputRoll, 4);
 
     /*floatAsBytes rollDeb;
     rollDeb.fval = OutputRoll;
@@ -519,10 +520,10 @@ void loop() {
     if (esc_3 < 1024) esc_3 = 1024;                                         //Keep the motors running.
     if (esc_4 < 1024) esc_4 = 1024;                                         //Keep the motors running.
 
-    if (esc_1 > 3072)esc_1 = 3072;                                          //Limit the esc-1 pulse.
-    if (esc_2 > 3072)esc_2 = 3072;                                          //Limit the esc-2 pulse.
-    if (esc_3 > 3072)esc_3 = 3072;                                          //Limit the esc-3 pulse.
-    if (esc_4 > 3072)esc_4 = 3072;                                          //Limit the esc-4 pulse.
+    if (esc_1 > 1200)esc_1 = 1200;                                          //Limit the esc-1 pulse.
+    if (esc_2 > 1200)esc_2 = 1200;                                          //Limit the esc-2 pulse.
+    if (esc_3 > 1200)esc_3 = 1200;                                          //Limit the esc-3 pulse.
+    if (esc_4 > 1200)esc_4 = 1200;                                          //Limit the esc-4 pulse.
 
     while(micros() - loop_timer < 20000);                                      //We wait until 20000us are passed.
     loop_timer = micros();

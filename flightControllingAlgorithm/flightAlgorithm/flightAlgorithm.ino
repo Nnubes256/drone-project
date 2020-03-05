@@ -1,3 +1,5 @@
+
+  
 //PID algorithm library
 #include <PID_v1.h>
 
@@ -5,7 +7,6 @@
 #include <util/crc16.h>
 
 //libraries for controlling the gyroscope
-#include <EEPROM.h>
 #include <Adafruit_Sensor.h>
 #include <Adafruit_BNO055.h>
 #include <utility/imumaths.h>
@@ -31,10 +32,14 @@ sensors_event_t event;  //this variable contains the values of the gyroscope axi
 //variable to be received from the serial port
 int incomingByte = 0; // for incoming serial data
 
-int lostPackages = 0;
+int lostPakages = 0;
+
+unsigned long loop_timer;
 
 byte* rpiTX;
 byte* rpiTXBack;
+
+bool firstLoop = false;
 
 short int counter = 0;
 
@@ -48,10 +53,11 @@ Adafruit_PWMServoDriver pwm = Adafruit_PWMServoDriver();
 
 //PID algorithm parametres
 //Define Variables we'll be connecting to
-double SetpointRoll, InputRoll, OutputRoll;
+double SetpointRoll, InputRoll, OutputRoll,
+       InputRollPrev = 0.0, InputPitchPrev = 0.0, InputYawPrev = 0.0;
 
 //Specify the links and initial tuning parameters
-double Kp = 2, Ki = 5, Kd = 1;
+double Kp = 7, Ki = 0, Kd = 30;
 PID myPIDRoll(&InputRoll, &OutputRoll, &SetpointRoll, Kp, Ki, Kd, DIRECT);
 
 //Define Variables we'll be connecting to
@@ -60,7 +66,8 @@ PID myPIDPitch(&InputPitch, &OutputPitch, &SetpointPitch, Kp, Ki, Kd, DIRECT);
 
 //Define Variables we'll be connecting to
 double SetpointYaw, InputYaw, OutputYaw;
-PID myPIDYaw(&InputYaw, &OutputYaw, &SetpointYaw, Kp, Ki, Kd, DIRECT);
+double yawKp = 55, yawKi = 0.7, yawKd = 0.0;
+PID myPIDYaw(&InputYaw, &OutputYaw, &SetpointYaw, yawKp, yawKi, yawKd, DIRECT);
 
 //function prototipes
 
@@ -69,6 +76,7 @@ short unsigned int setSpeedMotor(int n, int speedM);
 void sendDroneMsg(byte* msg, size_t len);
 bool recvDroneMsg(byte* msg, size_t maxLen);
 void emergencyLanding();
+void quatToEuler(imu::Vector<3> *output, imu::Quaternion *input);
 
 void setup() {
   rpiTX = (byte*) calloc(64, sizeof(byte));  //reserve 64 bytes of memory in the variable to be readed from the serial port
@@ -86,6 +94,11 @@ void setup() {
     ;
   }
 
+  lostPakages = 0;
+
+  //Turn on the warning led.
+  digitalWrite(12, HIGH);
+
   /* Initialise the gyroscope */
   if (!bno.begin()) {
     Serial.print("No gyroscope detected");
@@ -94,18 +107,17 @@ void setup() {
   delay(1000);
   bno.setExtCrystalUse(true);
 
+  //set the frecuency of the motors to 50 hz
   pwm.begin();
-  // In theory the internal oscillator is 25MHz but it really isn't
-  // that precise. You can 'calibrate' by tweaking this number till
-  // you get the frequency you're expecting!
   pwm.setOscillatorFrequency(27000000);  // The int.osc. is closer to 27MHz  
   pwm.setPWMFreq(50);  // Analog servos run at ~50 Hz updates
 
-  //turn on the motors in a low throttle
-  setSpeedMotor(0, 512);
-  setSpeedMotor(1, 512);
-  setSpeedMotor(2, 512);
-  setSpeedMotor(3, 512);
+  myPIDRoll.SetOutputLimits(-400, 400);
+  myPIDPitch.SetOutputLimits(-400, 400);
+  myPIDYaw.SetOutputLimits(-400, 400);
+  myPIDRoll.SetSampleTime(20);
+  myPIDPitch.SetSampleTime(20);
+  myPIDYaw.SetSampleTime(20);
 
   //tunnig the PID algorithm
   SetpointPitch = 0;
@@ -117,98 +129,140 @@ void setup() {
   myPIDYaw.SetMode(AUTOMATIC);
 
   //the giroscope calibration -- the gyroscope should not be used until the system values is greater than 1
-  uint8_t sys, gyro, accel, mag;
-  long bnoID;
-  int eeAddress = 0;
-  sys = gyro = accel = mag = 0;
+  uint8_t systemm, gyro, accel, mag;
+  systemm = gyro = accel = mag = 0;
 
-  EEPROM.get(eeAddress, bnoID);
-  adafruit_bno055_offsets_t calibrationData;
-  sensor_t sensor;
-  
-  bno.getSensor(&sensor);
-  if (bnoID == sensor.sensor_id) {
-    // Found some pre-existing calibration data!
-    eeAddress += sizeof(long);
-    EEPROM.get(eeAddress, calibrationData);
-    bno.setSensorOffsets(calibrationData);
-  }
-
-  
   bno.setExtCrystalUse(true);
+  
+  bno.getCalibration(&systemm, &gyro, &accel, &mag);
 
-  bno.getCalibration(&sys, &gyro, &accel, &mag);
-  while (sys == 0) {
-    bno.getCalibration(&sys, &gyro, &accel, &mag);
+  /* The data should be ignored until the system calibration is > 0 */
+  while (!systemm){
+    bno.getCalibration(&systemm, &gyro, &accel, &mag);
   }
+
+  //When everything is done, turn off the led.
+  digitalWrite(12, LOW);
 }
 
 void loop() {
   //read the information from the raspberry pi
   int8_t header;
-  int16_t pitch, roll, yaw;
-  uint16_t throttle;
-  uint16_t esc_1, esc_2, esc_3, esc_4;
+  int16_t pitch = 2048, roll = 2048, yaw = 2048;
+  uint16_t raspberryThrottle = 1024;
+
   bool errorCommunication = false;
  
   //read the incoming bytes 
   if (recvDroneMsg(rpiTX, 64)) 
   {
-    lostPackages = 0;
+    lostPakages = 0;
     
+    header = rpiTX[0];
     roll = ((int16_t) rpiTX[0]) | (((int16_t) rpiTX[1]) << 8);
     pitch = ((int16_t) rpiTX[2]) | (((int16_t) rpiTX[3]) << 8);
     yaw = ((int16_t) rpiTX[4]) | (((int16_t) rpiTX[5]) << 8);
-    throttle = ((uint16_t) rpiTX[6]) | (((uint16_t) rpiTX[7]) << 8);
+    raspberryThrottle = ((uint16_t) rpiTX[6]) | (((uint16_t) rpiTX[7]) << 8);
 
     //the setpoints must be taken from the raspberry pi
-    SetpointYaw = (float)yaw;
-    SetpointPitch = (float)pitch;
-    SetpointRoll = (float)roll;
+    //SetpointYaw = (float)yaw;
+    //SetpointPitch = (float)pitch;
+    //SetpointRoll = (float)roll;
   }
   else
-    lostPackages++;
+    lostPakages++;
+
+  imu::Quaternion quaternion = bno.getQuat();
+  imu::Vector<3> angle = imu::Vector<3>(0,0,0);
+  quatToEuler(&angle, &quaternion);
+  imu::Vector<3> gyro = (bno.getVector(Adafruit_BNO055::VECTOR_GYROSCOPE));
+
+  // TODO test this new code
+  //input values -- taken from the gyroscope
+  // /w angle correction
+  if (firstLoop) {
+    InputRoll = gyro.x();
+    InputPitch = -gyro.y();
+    InputYaw = gyro.z();
+  } else {
+    InputRoll = (InputRoll * 0.7) + (gyro.x() * 0.3);   //Gyro pid input is deg/sec --> we substract from the previous measurement to get it
+    InputPitch = (InputPitch * 0.7) + (-gyro.y() * 0.3);  //Gyro pid input is deg/sec.
+    InputYaw = (InputYaw * 0.7) + (gyro.z() * 0.3);    //Gyro pid input is deg/sec.
+  }
+
+  if (!isnan(InputRoll)) { InputRollPrev = gyro.x();   /*Gyro pid input is deg/sec.*/ } else { InputRoll = InputRollPrev; }
+  if (!isnan(InputPitch)) { InputPitchPrev = -gyro.y();   /*Gyro pid input is deg/sec.*/ } else { InputPitch = InputPitchPrev; }
+  if (!isnan(InputYaw)) { InputYawPrev = gyro.z();   /*Gyro pid input is deg/sec*/ } else { InputYaw = InputYawPrev; }
+
+  firstLoop = false;
+
+  Serial.println(angle.x());
+  Serial.println(angle.y());
+
+  SetpointYaw = 0;
+  SetpointPitch = 0;
+  SetpointRoll = 0;
+  // We also add a certain amount of deadband, in order to improve flight
+    if (yaw < 2040 || yaw > 2054) {
+      int16_t deadzoneCorr = 0;
+      if (yaw > 2054) { deadzoneCorr = 2054; }
+      else if (yaw < 2040) { deadzoneCorr = 2040; }
+      //Serial.println(yaw - deadzoneCorr);
+      SetpointYaw =  ((double) (yaw - deadzoneCorr)) / 6.19;
+    }
+    if (pitch < 2040 || pitch > 2054) {
+      int16_t deadzoneCorr = 0;
+      if (pitch > 2054) { deadzoneCorr = 2054; }
+      else if (pitch < 2040) { deadzoneCorr = 2040; }
+      //Serial.println((euler.z() * 30.72), 4);
+      SetpointPitch = (((double) (pitch - deadzoneCorr)) - (-angle.y() * 30.72)) / 6.19;
+    }
+    if (roll < 2040 || roll > 2054) {
+      int16_t deadzoneCorr = 0;
+      if (roll > 2054) { deadzoneCorr = 2054; }
+      else if (roll < 2040) { deadzoneCorr = 2040; }
+      SetpointRoll = (((double) (roll - deadzoneCorr)) - (angle.x() * 30.72)) / 6.19;
+    }
 
   //pakeges lost
-  if(lostPackages > 5)
+ /* if(lostPakages > 5)
   {
     SetpointYaw = 0;
     SetpointPitch = 0;
     SetpointRoll = 0;
   }
-  if(lostPackages > 40)
-    throttle = throttle * 0.96; //reduce the throttle speed
-
-
-  //this function to read the sensors return the values in degrees per second
-  imu::Vector<3> euler = (bno.getVector(Adafruit_BNO055::VECTOR_GYROSCOPE) * 180) / PI;
-
-  //input values -- taken from the gyroscope
-  InputRoll = euler.x();   //Gyro pid input is deg/sec.
-  InputPitch = euler.y();  //Gyro pid input is deg/sec.
-  InputYaw = euler.z();    //Gyro pid input is deg/sec.
-
+  if(lostPakages > 40)
+    raspberryThrottle = raspberryThrottle * 0.96; //reduce the throttle speed
+*/
   //Calcuate the PID
   myPIDRoll.Compute();
   myPIDYaw.Compute();
   myPIDPitch.Compute();
 
-  if (throttle > 3072) throttle = 3072;                                   //We need some room to keep full control at full throttle.
+  if (raspberryThrottle > 3072) raspberryThrottle = 3072;                                   //We need some room to keep full control at full throttle.
 
-  esc_1 = throttle - (int16_t) OutputPitch + (int16_t) OutputRoll - (int16_t) OutputYaw; //Calculate the pulse for esc 1 (front-right - CCW)
-  esc_2 = throttle + (int16_t) OutputPitch + (int16_t) OutputRoll + (int16_t) OutputYaw; //Calculate the pulse for esc 2 (rear-right - CW)
-  esc_3 = throttle + (int16_t) OutputPitch - (int16_t) OutputRoll - (int16_t) OutputYaw; //Calculate the pulse for esc 3 (rear-left - CCW)
-  esc_4 = throttle - (int16_t) OutputPitch - (int16_t) OutputRoll + (int16_t) OutputYaw; //Calculate the pulse for esc 4 (front-left - CW)
+  uint16_t esc_1 = raspberryThrottle - (int16_t)OutputPitch + (int16_t)OutputRoll - (int16_t)OutputYaw; //Calculate the pulse for esc 1 (front-right - CCW)
+  uint16_t esc_2 = raspberryThrottle + (int16_t)OutputPitch + (int16_t)OutputRoll + (int16_t)OutputYaw; //Calculate the pulse for esc 2 (rear-right - CW)
+  uint16_t esc_3 = raspberryThrottle + (int16_t)OutputPitch - (int16_t)OutputRoll - (int16_t)OutputYaw; //Calculate the pulse for esc 3 (rear-left - CCW)
+  uint16_t esc_4 = raspberryThrottle - (int16_t)OutputPitch - (int16_t)OutputRoll + (int16_t)OutputYaw; //Calculate the pulse for esc 4 (front-left - CW)
 
+  Serial.println(angle.x());
+  Serial.println(angle.y());
+  Serial.println(angle.x());
+  Serial.println(angle.y());
+  
   if (esc_1 < 1024) esc_1 = 1024;                                         //Keep the motors running.
   if (esc_2 < 1024) esc_2 = 1024;                                         //Keep the motors running.
   if (esc_3 < 1024) esc_3 = 1024;                                         //Keep the motors running.
   if (esc_4 < 1024) esc_4 = 1024;                                         //Keep the motors running.
 
-  if (esc_1 > 3072) esc_1 = 3072;                                          //Limit the esc-1 pulse.
-  if (esc_2 > 3072) esc_2 = 3072;                                          //Limit the esc-2 pulse.
-  if (esc_3 > 3072) esc_3 = 3072;                                          //Limit the esc-3 pulse.
-  if (esc_4 > 3072) esc_4 = 3072;                                          //Limit the esc-4 pulse.
+  if (esc_1 > 2500)esc_1 = 3072;                                          //Limit the esc-1 pulse.
+  if (esc_2 > 2500)esc_2 = 3072;                                          //Limit the esc-2 pulse.
+  if (esc_3 > 2500)esc_3 = 3072;                                          //Limit the esc-3 pulse.
+  if (esc_4 > 2500)esc_4 = 3072;                                          //Limit the esc-4 pulse.
+
+  while(micros() - loop_timer < 20000);                                      //We wait until 20000us are passed.
+  loop_timer = micros();
 
   short unsigned int speedMotor1 = setSpeedMotor(0, esc_1);
   short unsigned int speedMotor2 = setSpeedMotor(1, esc_2);
@@ -217,11 +271,9 @@ void loop() {
 
   //send to the raspberry pi the new values of the motors
 
-  for(int i = 0 ; i < 64 ; i++)
-  {
+  for(int i = 0 ; i < 64 ; i++) //initialize the arrays of bytes to zero
     rpiTXBack[i] = 0x01;
-  }
-
+    
   rpiTXBack[1] = (counter >> 8) & 0xFF;
   rpiTXBack[0] = counter & 0xFF;
   counter++;
@@ -239,13 +291,13 @@ void loop() {
   floatAsBytes accelerometerAxisX, accelerometerAxisY, accelerometerAxisZ;
 
   imu::Quaternion quat = bno.getQuat();
-  
+
   axisW.fval = (float) quat.w();
   rpiTXBack[10] = axisW.bval[0];
   rpiTXBack[11] = axisW.bval[1];
   rpiTXBack[12] = axisW.bval[2];
   rpiTXBack[13] = axisW.bval[3];
-    
+
   axisX.fval = (float) quat.x();
   rpiTXBack[14] = axisX.bval[0];
   rpiTXBack[15] = axisX.bval[1];
@@ -283,7 +335,8 @@ void loop() {
   rpiTXBack[36] = accelerometerAxisZ.bval[2];
   rpiTXBack[37] = accelerometerAxisZ.bval[3];
 
-  //sendDroneMsg1(rpiTXBack, 64);
+
+  //send data back to the raspberry pi
   sendDroneMsg(rpiTXBack, 64);
 }
 
@@ -292,6 +345,20 @@ short unsigned int setSpeedMotor(int n, int speedM){
     int speedMotor = map(speedM , 0, 4096, MinSpeed, MaxSpeed);
     pwm.setPWM(n, 0, speedMotor);
     return (short)speedMotor;
+}
+
+
+//gyroscope functions
+
+void quatToEuler(imu::Vector<3> *output, imu::Quaternion *input) {
+  double w = input->w();
+  double x = input->x();
+  double y = input->y();
+  double z = input->z();
+
+  output->x() = atan2(2.0 * (z * y + w * x) , 1.0 - 2.0 * (x * x + y * y));
+  output->y() = asin(2.0 * (y * w - z * x));
+  output->z() = atan2(2.0 * (z * w + x * y) , - 1.0 + 2.0 * (w * w + x * x));
 }
 
 //communication functions
