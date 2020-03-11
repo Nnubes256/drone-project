@@ -11,6 +11,7 @@
 #include <Adafruit_BNO055.h>
 #include <utility/imumaths.h>
 
+
 //ilbrary for controlling the servo motors
 #include <Adafruit_PWMServoDriver.h>
 
@@ -115,9 +116,9 @@ void setup() {
   myPIDRoll.SetOutputLimits(-400, 400);
   myPIDPitch.SetOutputLimits(-400, 400);
   myPIDYaw.SetOutputLimits(-400, 400);
-  myPIDRoll.SetSampleTime(20);
-  myPIDPitch.SetSampleTime(20);
-  myPIDYaw.SetSampleTime(20);
+  myPIDRoll.SetSampleTime(1);
+  myPIDPitch.SetSampleTime(1);
+  myPIDYaw.SetSampleTime(1);
 
   //tunnig the PID algorithm
   SetpointPitch = 0;
@@ -146,6 +147,9 @@ void setup() {
 }
 
 void loop() {
+  //get starting time 
+  unsigned long firstTime = millis();
+  
   //read the information from the raspberry pi
   int8_t header;
   int16_t pitch = 2048, roll = 2048, yaw = 2048;
@@ -184,7 +188,79 @@ void loop() {
     esc_4 = 1024;
   }
   else{
+    //read values from the giroscope
+    imu::Quaternion quaternion = bno.getQuat();
+    imu::Vector<3> angle = imu::Vector<3>(0,0,0);
+    quatToEuler(&angle, &quaternion);
+    imu::Vector<3> gyro = (bno.getVector(Adafruit_BNO055::VECTOR_GYROSCOPE));
 
+    // /w angle correction
+    if (firstLoop) {
+      InputRoll = gyro.x();
+      InputPitch = -gyro.y();
+      InputYaw = gyro.z();
+    } else {
+      InputRoll = (InputRoll * 0.7) + (gyro.x() * 0.3);   //Gyro pid input is deg/sec --> we substract from the previous measurement to get it
+      InputPitch = (InputPitch * 0.7) + (-gyro.y() * 0.3);  //Gyro pid input is deg/sec.
+      InputYaw = (InputYaw * 0.7) + (gyro.z() * 0.3);    //Gyro pid input is deg/sec.
+    }
+
+    if (!isnan(InputRoll)) { InputRollPrev = gyro.x();   /*Gyro pid input is deg/sec.*/ } else { InputRoll = InputRollPrev; }
+    if (!isnan(InputPitch)) { InputPitchPrev = -gyro.y();   /*Gyro pid input is deg/sec.*/ } else { InputPitch = InputPitchPrev; }
+    if (!isnan(InputYaw)) { InputYawPrev = gyro.z();   /*Gyro pid input is deg/sec*/ } else { InputYaw = InputYawPrev; }
+
+    firstLoop = false;
+
+    Serial.println(angle.x());
+    Serial.println(angle.y());
+  
+    SetpointYaw = 0;
+    SetpointPitch = 0;
+    SetpointRoll = 0;
+    
+    // We also add a certain amount of deadband, in order to improve flight
+    if (yaw < 2040 || yaw > 2054) {
+      int16_t deadzoneCorr = 0;
+      if (yaw > 2054) { deadzoneCorr = 2054; }
+      else if (yaw < 2040) { deadzoneCorr = 2040; }
+      //Serial.println(yaw - deadzoneCorr);
+      SetpointYaw =  ((double) (yaw - deadzoneCorr)) / 6.19;
+    }
+    if (pitch < 2040 || pitch > 2054) {
+      int16_t deadzoneCorr = 0;
+      if (pitch > 2054) { deadzoneCorr = 2054; }
+      else if (pitch < 2040) { deadzoneCorr = 2040; }
+      //Serial.println((euler.z() * 30.72), 4);
+      SetpointPitch = (((double) (pitch - deadzoneCorr)) - (-angle.y() * 30.72)) / 6.19;
+    }
+    if (roll < 2040 || roll > 2054) {
+      int16_t deadzoneCorr = 0;
+      if (roll > 2054) { deadzoneCorr = 2054; }
+      else if (roll < 2040) { deadzoneCorr = 2040; }
+      SetpointRoll = (((double) (roll - deadzoneCorr)) - (angle.x() * 30.72)) / 6.19;
+    }
+  
+    //pakeges lost
+   
+    //Calcuate the PID
+    myPIDRoll.Compute();
+    myPIDYaw.Compute();
+    myPIDPitch.Compute();
+
+    myPIDRoll.Compute();
+    myPIDYaw.Compute();
+    myPIDPitch.Compute();
+  
+    while(firstTime + 10000 > millis());
+  }
+   
+  if(raspberryThrottle == 1024){
+    esc_1 = 1024;
+    esc_2 = 1024;
+    esc_3 = 1024;
+    esc_4 = 1024;
+  }
+  else{
     imu::Quaternion quaternion = bno.getQuat();
     imu::Vector<3> angle = imu::Vector<3>(0,0,0);
     quatToEuler(&angle, &quaternion);
@@ -238,16 +314,11 @@ void loop() {
       }
 
     //pakeges lost
-   /* if(lostPakages > 5)
-    {
-      SetpointYaw = 0;
-      SetpointPitch = 0;
-      SetpointRoll = 0;
-    }
-    if(lostPakages > 40)
-      raspberryThrottle = raspberryThrottle * 0.96; //reduce the throttle speed
-  */
     //Calcuate the PID
+    myPIDRoll.Compute();
+    myPIDYaw.Compute();
+    myPIDPitch.Compute();
+
     myPIDRoll.Compute();
     myPIDYaw.Compute();
     myPIDPitch.Compute();
@@ -259,11 +330,6 @@ void loop() {
     uint16_t esc_3 = raspberryThrottle + (int16_t)OutputPitch - (int16_t)OutputRoll - (int16_t)OutputYaw; //Calculate the pulse for esc 3 (rear-left - CCW)
     uint16_t esc_4 = raspberryThrottle - (int16_t)OutputPitch - (int16_t)OutputRoll + (int16_t)OutputYaw; //Calculate the pulse for esc 4 (front-left - CW)
 
-    Serial.println(angle.x());
-    Serial.println(angle.y());
-    Serial.println(angle.x());
-    Serial.println(angle.y());
-
     if (esc_1 < 1024) esc_1 = 1024;                                         //Keep the motors running.
     if (esc_2 < 1024) esc_2 = 1024;                                         //Keep the motors running.
     if (esc_3 < 1024) esc_3 = 1024;                                         //Keep the motors running.
@@ -274,10 +340,7 @@ void loop() {
     if (esc_3 > 2500)esc_3 = 3072;                                          //Limit the esc-3 pulse.
     if (esc_4 > 2500)esc_4 = 3072;                                          //Limit the esc-4 pulse.
   }
-
-  while(micros() - loop_timer < 20000);                                      //We wait until 20000us are passed.
-  loop_timer = micros();
-
+  
   short unsigned int speedMotor1 = setSpeedMotor(0, esc_1);
   short unsigned int speedMotor2 = setSpeedMotor(1, esc_2);
   short unsigned int speedMotor3 = setSpeedMotor(2, esc_3);
@@ -349,9 +412,10 @@ void loop() {
   rpiTXBack[36] = accelerometerAxisZ.bval[2];
   rpiTXBack[37] = accelerometerAxisZ.bval[3];
 
-
   //send data back to the raspberry pi
   sendDroneMsg(rpiTXBack, 64);
+
+  while(firstTime + 20000 > millis());
 }
 
 //motor speed function
@@ -361,9 +425,7 @@ short unsigned int setSpeedMotor(int n, int speedM){
     return (short)speedMotor;
 }
 
-
 //gyroscope functions
-
 void quatToEuler(imu::Vector<3> *output, imu::Quaternion *input) {
   double w = input->w();
   double x = input->x();
@@ -458,7 +520,6 @@ bool recvDroneMsg(byte* msg, size_t maxLen) {
   if (expectedCRC != obtainedCRC) {
     return false;
   }
-
   return true;
 }
 
