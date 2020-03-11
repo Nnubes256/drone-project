@@ -1,4 +1,4 @@
-
+//flight controlling algorithm
   
 //PID algorithm library
 #include <PID_v1.h>
@@ -58,7 +58,7 @@ double SetpointRoll, InputRoll, OutputRoll,
        InputRollPrev = 0.0, InputPitchPrev = 0.0, InputYawPrev = 0.0;
 
 //Specify the links and initial tuning parameters
-double Kp = 7, Ki = 0, Kd = 30;
+double Kp = 1, Ki = 0, Kd = 0;
 PID myPIDRoll(&InputRoll, &OutputRoll, &SetpointRoll, Kp, Ki, Kd, DIRECT);
 
 //Define Variables we'll be connecting to
@@ -67,7 +67,7 @@ PID myPIDPitch(&InputPitch, &OutputPitch, &SetpointPitch, Kp, Ki, Kd, DIRECT);
 
 //Define Variables we'll be connecting to
 double SetpointYaw, InputYaw, OutputYaw;
-double yawKp = 55, yawKi = 0.7, yawKd = 0.0;
+double yawKp = 1, yawKi = 0, yawKd = 0;
 PID myPIDYaw(&InputYaw, &OutputYaw, &SetpointYaw, yawKp, yawKi, yawKd, DIRECT);
 
 //function prototipes
@@ -113,9 +113,9 @@ void setup() {
   pwm.setOscillatorFrequency(27000000);  // The int.osc. is closer to 27MHz  
   pwm.setPWMFreq(50);  // Analog servos run at ~50 Hz updates
 
-  myPIDRoll.SetOutputLimits(-400, 400);
-  myPIDPitch.SetOutputLimits(-400, 400);
-  myPIDYaw.SetOutputLimits(-400, 400);
+  myPIDRoll.SetOutputLimits(-800, 800);
+  myPIDPitch.SetOutputLimits(-800, 800);
+  myPIDYaw.SetOutputLimits(-800, 800);
   myPIDRoll.SetSampleTime(1);
   myPIDPitch.SetSampleTime(1);
   myPIDYaw.SetSampleTime(1);
@@ -148,7 +148,7 @@ void setup() {
 
 void loop() {
   //get starting time 
-  unsigned long firstTime = millis();
+  unsigned long firstTime = micros();
   
   //read the information from the raspberry pi
   int8_t header;
@@ -251,7 +251,7 @@ void loop() {
     myPIDYaw.Compute();
     myPIDPitch.Compute();
   
-    while(firstTime + 10000 > millis());
+    while(firstTime + 10000 > micros());
   }
    
   if(raspberryThrottle == 1024){
@@ -415,13 +415,13 @@ void loop() {
   //send data back to the raspberry pi
   sendDroneMsg(rpiTXBack, 64);
 
-  while(firstTime + 20000 > millis());
+  while(firstTime + 20000 > micros());
 }
 
 //motor speed function
 short unsigned int setSpeedMotor(int n, int speedM){
     int speedMotor = map(speedM , 0, 4096, MinSpeed, MaxSpeed);
-    pwm.setPWM(n, 0, speedMotor);
+    //pwm.setPWM(n, 0, speedMotor);
     return (short)speedMotor;
 }
 
