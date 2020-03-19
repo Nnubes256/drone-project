@@ -32,7 +32,7 @@
                 if (msg.gamepad.axis_state.yaw != null) document.getElementById("gpad_yaw").textContent = `${msg.gamepad.axis_state.yaw}`;
                 if (msg.gamepad.axis_state.throttle != null) document.getElementById("gpad_throttle").textContent = `${msg.gamepad.axis_state.throttle}`;
             }
-            if (msg.drone.orientation.throttle_lock != null) document.getElementById("gpad_lock").textContent = `${JSON.stringify(msg.gamepad.throttle_lock)}`;
+            if (msg.gamepad.throttle_lock != null) document.getElementById("gpad_lock").textContent = `${JSON.stringify(msg.gamepad.throttle_lock)}`;
         }
         if (msg.drone) {
             if (msg.drone.motor_speeds) {

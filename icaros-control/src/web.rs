@@ -365,5 +365,5 @@ pub async fn webserver_main(
                 state_r.x, state_r.y, state_r.z)
         });*/
 
-    warp::serve(full_routes).run(([127, 0, 0, 1], 3030)).await;
+    warp::serve(full_routes).run(([0, 0, 0, 0], 3030)).await;
 }
