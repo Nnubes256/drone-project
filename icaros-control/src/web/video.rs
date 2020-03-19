@@ -2,6 +2,7 @@ use tokio::prelude::*;
 use tokio_util::codec::Decoder;
 use bytes::Buf;
 use std::iter::FromIterator;
+use serde::Serialize;
 
 const NAL_SEPARATOR: &[u8] = &[0,0,0,1];
 
@@ -9,6 +10,15 @@ lazy_static! {
     static ref NAL_SEPARATOR_REGEX: regex::bytes::Regex = {
         regex::bytes::Regex::new(r"(?-u)\x00\x00\x00\x01").unwrap()
     };
+}
+
+#[derive(Serialize)]
+#[serde(tag = "action", content = "payload")]
+pub enum VideoControlPayload {
+    #[serde(rename = "initialize")]
+    Initialize { width: u32, height: u32, stream_active: bool },
+    #[serde(rename = "stream_active")]
+    StreamActive(bool)
 }
 
 pub struct NALSeparator {

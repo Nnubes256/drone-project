@@ -1,7 +1,7 @@
 (function() {
     'use strict';
 
-    let exampleSocket = new WebSocket("ws://127.0.0.1:3030/feed");
+    let exampleSocket = new WebSocket("ws://" + document.location.host + "/feed");
 
     exampleSocket.onopen = (event) => {
         document.getElementById("conn_status").textContent = "Connected!";
@@ -59,4 +59,40 @@
             }
         }
     }
+}());
+
+(function() {
+    'use strict';
+
+    var video_cont = document.getElementById('video');
+    var fb = document.getElementById('frame_buffer');
+
+    var wsavc = new WSAvcPlayer.default({ useWorker:true });
+    document.getElementById('video').appendChild(wsavc.AvcPlayer.canvas)
+    //expose instance for button callbacks
+    window.wsavc = wsavc;
+
+    //maybe get rid of the ws inside the player?
+    //var uri = "ws://meganeko:3000/videoStream"// + document.location.host;
+    var uri = "ws://" + document.location.host + "/video";
+    //var uri = "ws://localhost:3333/"
+    wsavc.connect(uri);
+
+    //wsavc.on('message', m=>console.log(m))
+
+    wsavc.on('disconnected', () => console.log('WS Disconnected'))
+    wsavc.on('connected', () => console.log('WS connected'))
+    wsavc.on('frame_shift', (fbl) => {
+        fb.innerText = 'fl: ' + fbl
+    })
+
+    wsavc.on('resized', (payload) => {
+        console.log('resized', payload);
+        const vb = document.getElementById('video');
+
+        vb.style = `height: ${payload.height}px; width: ${ payload.width }px`
+    })
+
+    wsavc.on('stream_active', active => console.log('Stream is ', active ? 'active' : 'offline'))
+
 }());
