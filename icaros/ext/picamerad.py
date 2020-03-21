@@ -22,7 +22,7 @@ class ICAROSCameraControl(object):
         self.camera.iso = 400
         # TODO change pipe to wifi
         self.camera.start_recording(self.wifibroadcast.stdin, format='h264',
-                                    bitrate=24000000, intra_period=64,
+                                    bitrate=3200000, intra_period=64,
                                     inline_headers=True, profile='baseline')
 
     def capture(self, into_image_file="/tmp/out.jpg"):
