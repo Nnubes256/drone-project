@@ -13,8 +13,8 @@ class ICAROSCameraControl(object):
     def init(self):
         self.wifibroadcast = subprocess.Popen([
             "./rx", "-p", "0", "-b", "2", "-r", "4", "-f", "1100", "wlan1"
-        ], stdin=subprocess.PIPE)
-        self.camera = picamera.PiCamera(sensor_mode='6')
+        ], stdin=subprocess.PIPE, bufsize=0)
+        self.camera = picamera.PiCamera(sensor_mode=6)
         self.camera.resolution = (960, 540)
         self.camera.framerate = 50
         self.camera.exposure_mode = 'sports'
