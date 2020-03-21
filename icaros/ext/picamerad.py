@@ -5,7 +5,7 @@ import subprocess
 class ICAROSCameraControl(object):
     """docstring for ICAROSCameraControl."""
 
-    def __init__(self, arg):
+    def __init__(self):
         super(ICAROSCameraControl, self).__init__()
         self.camera = None
         self.wifibroadcast = None
