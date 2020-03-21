@@ -105,15 +105,19 @@ impl Decoder for NALSeparator {
 
     fn decode(&mut self, data: &mut bytes::BytesMut) -> Result<Option<Self::Item>, Self::Error> {
         let index;
-        if let Some(idx) = NAL_SEPARATOR_REGEX.find(&data[self.offset..]) {
-            index = idx.end();
+        if let Some(idx) = NAL_SEPARATOR_REGEX.find_at(&data, self.offset) {
+            index = idx.start();
         } else {
             self.offset = data.len().saturating_sub(4);
             return Ok(None);
         }
 
-        let final_data = Vec::from_iter(NAL_SEPARATOR.iter().copied().chain(data.split_to(index - 4)));
+        let data_split = data.split_to(index);
         data.advance(4);
+        if data_split.is_empty() {
+            return Ok(None);
+        }
+        let final_data = Vec::from_iter(NAL_SEPARATOR.iter().copied().chain(data_split));
         self.offset = 0;
         Ok(Some(final_data))
     }
@@ -123,15 +127,21 @@ impl Decoder for NALSeparator {
 mod tests {
     use super::*;
     use std::io::Cursor;
+    use tokio::fs::File;
     use tokio_util::codec::FramedRead;
-    use futures::StreamExt;
+    use futures::{StreamExt, TryFutureExt};
 
     #[tokio::test]
     async fn nal_separator() {
-        let some_stuff = Cursor::new(vec![3, 4, 5, 6, 7, 8, 9, 10, 0, 0, 0, 1, 7, 8, 9, 0, 0, 0, 1]);
-        let expected = vec![
+        //let some_stuff = File::open("/Users/Nnubes256/Desktop/Capturas/test.mp4").await.unwrap();
+        let some_stuff = Cursor::new(
+            vec![0, 0, 0, 1, 3, 4, 5, 6, 7, 8, 9, 10,
+                 0, 0, 0, 1, 7, 8, 9, 0, 0, 0, 1, 5, 6, 7, 8, 9, 10, 0, 0, 0, 1]
+        );
+        let expected: Vec<Vec<u8>> = vec![
             vec![0, 0, 0, 1, 3, 4, 5, 6, 7, 8, 9, 10],
-            vec![0, 0, 0, 1, 7, 8, 9]
+            vec![0, 0, 0, 1, 7, 8, 9],
+            vec![0, 0, 0, 1, 5, 6, 7, 8, 9, 10],
         ];
 
         let nal_separator = FramedRead::new(some_stuff, separate_nal());
@@ -140,7 +150,7 @@ mod tests {
 
         let mut stream = nal_separator
         .map(|x| {
-            assert_ne!(i, 2);
+            assert_ne!(i, 3);
             let data = match x {
                 Ok(data) => data,
                 Err(err) => return Err(err)
