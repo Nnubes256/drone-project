@@ -1,4 +1,6 @@
 //! Communication systems
 
 pub mod udp;
-//pub mod rf24;
+
+#[cfg(target = "armv7-unknown-linux-gnueabihf")]
+pub mod rf24;
