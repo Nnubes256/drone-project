@@ -42,7 +42,7 @@ fn get_scheduler() -> Result<AirPacketScheduler<RF24CommunicationService, Ground
     scheduler
 }
 
-#[cfg(not(target_os = "linux"))]
+#[cfg(not(target = "armv7-unknown-linux-gnueabihf"))]
 fn get_scheduler() -> Result<AirPacketScheduler<UDPCommunicationService, GroundSystemState, G2AMessage, A2GMessage>, std::io::Error> {
     // Configure the driver to listen to port 3333.
     let opts = UDPCommunicationOptions::new(format!("127.0.0.1"), 3333);
