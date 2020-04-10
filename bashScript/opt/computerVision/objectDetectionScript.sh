@@ -1,3 +1,3 @@
 #!/bin/bash
 
-/opt/computerVision/detector.py
+python3 /opt/computerVision/detector.py

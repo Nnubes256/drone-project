@@ -1,3 +1,6 @@
+//! Simulated implementation of an air-to-ground communication service (used to test data
+//! sending/reception to the flight controller without a proper ground control present)
+
 use err_derive::Error;
 use icaros_base::comms::air::{
     get_air_codec, A2GMessage, AirCommunicationService, G2ACommandType, G2AControllerAxisState,
@@ -91,6 +94,7 @@ impl AirCommunicationService<A2GMessage, G2AMessage> for SimulatedAirController 
 }
 
 impl SimulatedAirController {
+    /// Generates and/or updates the simulated data based on the previous state
     fn simulate_msg_sent(&mut self) {
         let timestamp_float = self.ground_data.timestamp as f64;
         if timestamp_float.sin() > 0.0 {

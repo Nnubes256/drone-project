@@ -15,7 +15,7 @@ fn main() {
     radio.listen_stop(); // Reset the radio-frequency mode
 
     radio.print_details(); // Print radio controller state to console
-        
+
     println!("Radio is {}", if radio.chip_connected() { "connected" } else { "DISCONNECTED" });
 
     // Main loop
@@ -31,11 +31,11 @@ fn main() {
             println!("RADIO FAILURE!");
         }
 
-        for rep in (0..num_reps).rev() { // For each measurement...
+        for _ in (0..num_reps).rev() { // For each measurement...
             for i in (0..num_channels).rev() { // For each channel...
                 radio.set_channel(i as u8); // Set the radio channel to the actual channel
                 radio.listen_start(); // Make the radio listen for a little while
-            
+
                 thread::sleep(Duration::from_micros(128)); // Sleep in the meantime
                 radio.listen_stop(); // Make the radio stop listening
 
@@ -44,7 +44,7 @@ fn main() {
                 }
             }
         }
-        
+
         // After we're done with a sweep, print our measurements.
         for i in 0..num_channels {
             print!("{:X}", min(0xF, measurements[i]));

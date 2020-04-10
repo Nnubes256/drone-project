@@ -1,3 +1,22 @@
+//! CRC calculation utilities
+//!
+//! Source: From [^1] which by itself cites:
+//! > *See the Dallas Semiconductor app note 27 for 8051 assembler example and general CRC optimization suggestions. The table on the last page of the app note is the key to understanding these implementations.*
+//! >
+//! > *Jack Crenshaw's "Implementing CRCs" article in the January 1992 isue of Embedded Systems Programming. This may be difficult to find, but it explains CRC's in very clear and concise terms. Well worth the effort to obtain a copy.*
+//!
+//! [^1]: [https://www.nongnu.org/avr-libc/user-manual/group__util__crc.html](https://www.nongnu.org/avr-libc/user-manual/group__util__crc.html)
+
+
+/// CRC calculation update function mimicking the one built into AVR processors' standard
+/// libraries (i.e. Arduino)
+///
+/// Source: From [^1] which by itself cites:
+/// > *See the Dallas Semiconductor app note 27 for 8051 assembler example and general CRC optimization suggestions. The table on the last page of the app note is the key to understanding these implementations.*
+/// >
+/// > *Jack Crenshaw's "Implementing CRCs" article in the January 1992 isue of Embedded Systems Programming. This may be difficult to find, but it explains CRC's in very clear and concise terms. Well worth the effort to obtain a copy.*
+///
+/// [^1]: [https://www.nongnu.org/avr-libc/user-manual/group__util__crc.html](https://www.nongnu.org/avr-libc/user-manual/group__util__crc.html)
 #[inline]
 pub fn _crc16_update(curr_crc: u16, data: u8) -> u16 {
     let mut crc = curr_crc;
@@ -14,6 +33,7 @@ pub fn _crc16_update(curr_crc: u16, data: u8) -> u16 {
     crc
 }
 
+/// Calculates the CRC checksum of a given array
 pub fn crc16_calculate(data: &[u8]) -> u16 {
     let mut crc: u16 = 0; // Initial value
     for byte in data {

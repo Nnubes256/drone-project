@@ -420,8 +420,8 @@ void loop() {
 
 //motor speed function
 short unsigned int setSpeedMotor(int n, int speedM){
-    int speedMotor = map(speedM , 0, 4096, MinSpeed, MaxSpeed);
-    //pwm.setPWM(n, 0, speedMotor);
+    int speedMotor = map(speedM, 1000, 4096, MinSpeed, MaxSpeed);
+    pwm.setPWM(n, 0, speedMotor);
     return (short)speedMotor;
 }
 

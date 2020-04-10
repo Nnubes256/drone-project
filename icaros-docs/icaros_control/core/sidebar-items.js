@@ -1,0 +1,1 @@
+initSidebarItems({"constant":[["_IMPL_SERIALIZE_FOR_GroundSystemState",""]],"struct":[["GroundSystemState","Complete ground control system state"],["ICAROSGroundController","The central controller for all the systems around the ICAROS ground control."]],"type":[["DroneAirPacketScheduler",""]]});

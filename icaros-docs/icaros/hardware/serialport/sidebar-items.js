@@ -1,0 +1,1 @@
+initSidebarItems({"struct":[["SerialComunicationOptions","The parameters required to initialize a serial port communications driver using the `serialport` library."]]});

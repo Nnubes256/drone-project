@@ -1,3 +1,6 @@
+//! Dummy implementation of a flight controller communication service (used to test
+//! system's architecture)
+
 use err_derive::Error;
 use icaros_base::comms::controller::{
     get_controller_codec, A2RMessage, ControllerCommunicationService, ControllerReceiveError,

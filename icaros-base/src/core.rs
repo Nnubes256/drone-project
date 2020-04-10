@@ -1,9 +1,13 @@
+//! Base data structures
+
 use core::convert::TryFrom;
 use crate::comms::common::{MotorSpeed, Orientation, Acceleration};
 use crate::comms::air::G2AControllerAxisState;
 use crate::utils::{Quartenion, Point3};
 use serde::{Deserialize, Serialize};
 
+///
+/// Represents a possibly partial set of data extracted from the GPS
 #[derive(Default, Serialize, Clone)]
 pub struct GPSData {
     pub latitude: Option<f64>,
@@ -21,6 +25,9 @@ impl From<FullGPSData> for GPSData {
     }
 }
 
+
+///
+/// Represents a full set of data extracted from the GPS
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct FullGPSData {
     pub latitude: f64,
@@ -46,6 +53,10 @@ impl TryFrom<GPSData> for FullGPSData {
     }
 }
 
+///
+/// Represents the system state on the drone's side.
+///
+/// This includes the motor speeds, the drone's orientationa and acceleration, and its GPS data.
 #[derive(Default, Serialize)]
 pub struct DroneState {
     pub motor_speeds: MotorSpeed,
@@ -65,6 +76,8 @@ impl DroneState {
     }
 }
 
+///
+/// Represents the system state on the ground control's side (i.e. the gamepad inputs)
 #[derive(Serialize)]
 pub struct GroundControlState {
     pub controller_state: G2AControllerAxisState,

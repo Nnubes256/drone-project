@@ -1,0 +1,1 @@
+initSidebarItems({"fn":[["_crc16_update","CRC calculation update function mimicking the one built into AVR processors' standard libraries (i.e. Arduino)"],["crc16_calculate","Calculates the CRC checksum of a given array"]]});

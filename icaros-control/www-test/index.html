@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+    <head>
+        <meta charset="utf-8">
+        <title></title>
+        <script src="js/WSAvcPlayer.js" charset="utf-8"></script>
+        <script src="js/app.js" charset="utf-8"></script>
+    </head>
+    <body>
+        <h1>Hello World!</h1>
+        <p id="conn_status">Connecting...</p>
+        <p>Position is:</p>
+        <ul>
+            <li>X = <span id="x"></span></li>
+            <li>Y = <span id="y"></span></li>
+            <li>Z = <span id="z"></span></li>
+        </ul>
+        <p>Drone stuff is:</p>
+        <ul>
+            <li>Motor speeds = <span id="tl"></span> <span id="tr"></span> <span id="bl"></span> <span id="br"></span></li>
+            <li>Orientation = <span id="qw"></span> <span id="qx"></span> <span id="qy"></span> <span id="qz"></span></li>
+            <li>Acceleration = <span id="ax"></span> <span id="ay"></span> <span id="az"></span></li>
+            <li>GPS = <span id="lat"></span> <span id="lon"></span> <span id="alt"></span></li>
+            <li>Gamepad = <span id="gpad_roll"></span><br> <span id="gpad_pitch"></span><br> <span id="gpad_yaw"></span><br> <span id="gpad_throttle"></span><br> <span id="gpad_lock"></span></li>
+        </ul>
+        <p>Timestamp: <span id="time"></span></p>
+        <p id='frame_buffer'></p>
+        <div id="video">
+        </div>
+    </body>
+</html>

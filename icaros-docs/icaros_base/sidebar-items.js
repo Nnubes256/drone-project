@@ -1,0 +1,1 @@
+initSidebarItems({"mod":[["comms","Communications-related structures"],["core","Base data structures"],["utils","Utility structures and functions"]],"struct":[["BincodeConfig","A configuration builder whose options Bincode will use while serializing and deserializing."]]});

@@ -1,0 +1,10 @@
+[Unit]
+Description=Syncing system and hardware clock
+
+[Service]
+ExecStart=/opt/computerVision/objectDetectionScript.sh
+Requires=startDrone.service
+After=startDrone.service
+
+[Install]
+WantedBy=multi-user.target

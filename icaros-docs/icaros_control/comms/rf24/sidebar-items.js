@@ -1,0 +1,1 @@
+initSidebarItems({"struct":[["RF24CommunicationOptions","Settings structure for `RF24CommunicationService`"],["RF24CommunicationService","nRF24-based ground control communication service"]]});

@@ -26,13 +26,17 @@ impl GPSService {
         let mut nmea_sentence: String = String::with_capacity(128);
         while self.driver.get_ref().bytes_to_read()? > 20 {
             self.driver.read_line(&mut nmea_sentence)?;
-            match self.state.parse(&nmea_sentence) {
-                Ok(sntc) => {
-                    info!("GPSService recv: {:?}", sntc);
-                }, Err(e) => {
-                    error!("Parse failure for GPS data: {}", e);
-                }
-            };
+            for line in nmea_sentence.split("\n") {
+                //info!("{}", line);
+                match self.state.parse(&line) {
+                    Ok(_sntc) => {
+                        //info!("GPSService recv: {:?}", _sntc);
+                    }, Err(_e) => {
+                        //error!("Parse failure for GPS data: {}", _e);
+                    }
+                };
+            }
+
         }
 
         Ok(true)

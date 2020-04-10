@@ -1,6 +1,7 @@
+use std::error::Error;
 use rf24::RF24;
 
-fn main() {
+fn main() -> Result<(), Box<dyn Error>> {
     let mut radio: RF24 = RF24::from_spi_device(22, 0);
     println!("BEGIN");
     radio.begin();
@@ -8,8 +9,8 @@ fn main() {
     radio.set_retries(5, 15);
     radio.print_details();
 
-    radio.open_writing_pipe(b"2Node");
-    radio.open_reading_pipe(1, b"1Node");
+    radio.open_writing_pipe(b"2Node")?;
+    radio.open_reading_pipe(1, b"1Node")?;
 
     radio.listen_start();
 
@@ -22,9 +23,9 @@ fn main() {
             println!("RADIO FAILURE!");
         }
 
-        if (radio.available()) {
+        if radio.available() {
             let mut result = [0; 4];
-            
+
             println!("Packet!");
 
             match radio.read(&mut result) {

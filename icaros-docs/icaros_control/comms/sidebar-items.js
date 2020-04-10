@@ -1,0 +1,1 @@
+initSidebarItems({"mod":[["rf24","nRF24 implementation of an ground-to-air communication service (used in production)"],["udp","UDP implementation of an ground-to-air communication service (used to test communication with the drone without a nRF24L01+ radio set up."]]});

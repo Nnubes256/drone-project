@@ -1,3 +1,6 @@
+//! Dummy implementation of an air-to-ground communication service (used to test
+//! system's architecture)
+
 use bincode2;
 use err_derive::Error;
 use icaros_base::comms::air::{

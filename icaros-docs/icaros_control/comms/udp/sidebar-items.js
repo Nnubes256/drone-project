@@ -1,0 +1,1 @@
+initSidebarItems({"struct":[["UDPCommunicationOptions","Settings structure for `RF24CommunicationService`"],["UDPCommunicationService","UDP-based ground control communication service"]]});

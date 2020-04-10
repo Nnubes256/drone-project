@@ -1,3 +1,6 @@
+//! Simulated implementation of a flight controller communication service (used to test data
+//! sending/reception to the ground control without a proper flight controller present)
+
 use std::time::Instant;
 use err_derive::Error;
 use icaros_base::{
@@ -103,6 +106,7 @@ impl ControllerCommunicationService for SimulatedControllerController {
 }
 
 impl SimulatedControllerController {
+    /// Generates and/or updates the simulated data based on the previous state
     fn simulate_msg_sent(&mut self, msg: R2AMessage) {
         let mut accel_vec = self.controller_data.accel.as_point3_mut();
         accel_vec.x = msg.rpyt.roll as f32 * 0.8;

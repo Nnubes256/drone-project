@@ -1,3 +1,7 @@
+//!
+//! Packet scheduler for the flight controller and corresponding trait (interface) implementations
+//!
+
 use crate::core::SystemState;
 use icaros_base::comms::{
     common::PacketScheduler,
@@ -8,6 +12,10 @@ use icaros_base::comms::{
 };
 use std::{error::Error, mem};
 
+///
+/// Packet scheduler for the flight controller
+///
+/// `T` defines the underlying device driver to which packets are scheduled
 pub struct ControllerPacketScheduler<T: ControllerCommunicationService> {
     comm_service: T,
     tx_in: Option<R2AMessage>,
@@ -16,6 +24,8 @@ pub struct ControllerPacketScheduler<T: ControllerCommunicationService> {
 }
 
 impl<T: ControllerCommunicationService> ControllerPacketScheduler<T> {
+    /// Initializes a new flight controller packet scheduler, together with its underlying driver
+    /// and given the latter's settings to be used
     pub fn initialize(
         config: T::ControllerCommunicationOptions,
     ) -> Result<Self, T::HardwareDriverError> {
@@ -27,14 +37,19 @@ impl<T: ControllerCommunicationService> ControllerPacketScheduler<T> {
         })
     }
 
+    /// Generates a new outgoing message from the given system state and schedules them
+    /// for sending
     fn generate_message_from_state(&mut self, state: &SystemState) {
         self.tx_in = Some(R2AMessage::new(
             R2ADesiredRotationAndThrottle::from_controller(&state.ground.controller_state),
         ))
     }
 
+    /// Updates the given system state from the given incoming message
     fn update_state_from_message(&mut self, state: &mut SystemState, message: A2RMessage) {
+        // Check that the packet is not out of order (i.e. within reasonable counter bounds)
         if std::u16::MAX - self.counter < 10 || (message.counter as i32 - self.counter as i32) < 10 {
+            // Write data to the state
             state.drone.acceleration = message.acceleration;
             state.drone.orientation = message.orientation;
             state.drone.motor_speeds = message.motor_speed;
@@ -55,11 +70,16 @@ where
     }
 
     fn send_state(&mut self, state: &SystemState) -> Result<bool, Box<dyn Error>> {
+        // Generate a new message from the given state
         self.generate_message_from_state(state);
+
+        // If the message was successfully generated, send it
         if self.tx_in.is_some() {
+            // And make sure we don't send a packet twice by moving it into
+            // the temporary variable `packet`, placing a null value in its place
             let packet = mem::replace(&mut self.tx_in, None).unwrap();
+
             let result = self.comm_service.send(packet)?;
-            self.tx_in = None;
             Ok(result)
         } else {
             Ok(false)
@@ -68,6 +88,8 @@ where
 
     fn recv_state(&mut self, state: &mut SystemState) -> Result<bool, Box<dyn Error>> {
         let mut any_packet_received = false;
+
+        // While we have packets available, receive them
         while self.comm_service.recv_available()? > 0 {
             any_packet_received = true;
             let packet = match self.comm_service.recv() {
@@ -86,6 +108,7 @@ where
 
             self.latency_recv = 0;
 
+            // From them, update our own state
             self.update_state_from_message(state, packet);
         }
 

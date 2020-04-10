@@ -1,31 +1,149 @@
-<!DOCTYPE html>
-<html lang="en" dir="ltr">
+<html>
     <head>
         <meta charset="utf-8">
-        <title></title>
-        <script src="js/WSAvcPlayer.js" charset="utf-8"></script>
-        <script src="js/app.js" charset="utf-8"></script>
+        <title>Drone</title>
+        <link rel="stylesheet" href="style.css">
+
+        <script src='https://api.mapbox.com/mapbox-gl-js/v1.7.0/mapbox-gl.js'></script>
+            <link href='https://api.mapbox.com/mapbox-gl-js/v1.7.0/mapbox-gl.css' rel='stylesheet' />
+
+            <link rel="stylesheet" href="https://unpkg.com/leaflet@1.6.0/dist/leaflet.css"
+            integrity="sha512-xwE/Az9zrjBIphAcBb3F6JVqxf46+CDLwfLMHloNu6KEQCAWi6HcDUbeOfBIptF7tcCzusKFjFw2yuvEpDL9wQ=="
+            crossorigin=""/>
+
+            <!-- Make sure you put this AFTER Leaflet's CSS -->
+            <script src="https://unpkg.com/leaflet@1.6.0/dist/leaflet.js"
+            integrity="sha512-gZwIG9x3wUXg2hdXF6+rVkLF/0Vi9U8D2Ntg4Ga5I5BZpVkVxlJWbSQtXPSiUTtC0TjtGOmxa1AJPuV0CPthew=="
+            crossorigin="">
+        </script>
+        <script>
+            const bjs = document.createElement('script');
+            bjs.src = 'https://cdn.babylonjs.com/babylon.js';
+            bjs.async = false;
+            document.head.appendChild(bjs);
+        </script>
     </head>
     <body>
-        <h1>Hello World!</h1>
-        <p id="conn_status">Connecting...</p>
-        <p>Position is:</p>
-        <ul>
-            <li>X = <span id="x"></span></li>
-            <li>Y = <span id="y"></span></li>
-            <li>Z = <span id="z"></span></li>
-        </ul>
-        <p>Drone stuff is:</p>
-        <ul>
-            <li>Motor speeds = <span id="tl"></span> <span id="tr"></span> <span id="bl"></span> <span id="br"></span></li>
-            <li>Orientation = <span id="qw"></span> <span id="qx"></span> <span id="qy"></span> <span id="qz"></span></li>
-            <li>Acceleration = <span id="ax"></span> <span id="ay"></span> <span id="az"></span></li>
-            <li>GPS = <span id="lat"></span> <span id="lon"></span> <span id="alt"></span></li>
-            <li>Gamepad = <span id="gpad_roll"></span><br> <span id="gpad_pitch"></span><br> <span id="gpad_yaw"></span><br> <span id="gpad_throttle"></span><br> <span id="gpad_lock"></span></li>
-        </ul>
-        <p>Timestamp: <span id="time"></span></p>
-        <p id='frame_buffer'></p>
-        <div id="video">
+        <nav class="nav-main"class="nav-main">
+            <div class="btn-toggle-nav" onclick="toggleNav()"></div>
+            <ul>
+                <li><a href="#">Home</a></li>
+                <li><a href="#">Drone stats</a></li>
+                <li><a href="#">Computer Vision</a></li>
+                <li><a href="#">Gallery</a></li>
+                <li><a href="#">Contact</a></li>
+            </ul>
+        </nav>
+
+        <aside class="nav-sidebar">
+            <ul>
+                <li><span>Drone Project</span></li>
+                <li><a href="#">Components used</a></li>
+                <li><a href="#">Technical requirements</a></li>
+                <li><a href="#">privacy policy</a></li>
+            </ul>
+        </aside>
+
+        <div class="mainBody">
+            <div class="left-part">
+                <div class="errorControl">
+                    <br/>
+                    <span id="ErrorLED">SYSTEM STATUS</span>
+                    <br/>
+                    <br/>
+                    <div class="errorControlLowSpeed">
+                        <a id="lowSpeedLED">LOW SPEED</a>
+                    </div>
+                    <div class="errorControlLowBattery">
+                        <a id="lowBatteryLED" style="text-align: center; align-content: center;">LOW BATTERY</a>
+                    </div>
+                    <div class="errorControlAngle">
+                        <a id="dangerousAngleLED">ALGLE</a>
+                    </div>
+                    <br/>
+                    <div class="errorControlImage">
+                        <img id="angleImage" src="primaryFlightDisplay.png" width="100px" height="100px" alt="Angle display">
+                    </div>
+                </div>
+                <br/>
+                <br/>
+                <div class="droneModel">
+                    <br/>
+                    <span>DRONE MODEL</span>
+                    <model-3d background-color="#000000" src="drone3D.glb"></model-3d>
+                </div>
+            </div>
+
+            <video id="videoPlayer" class="center-part" controls>
+                <source id="videoCameraID"  style="height: inherit;" src="serverURL" type="video/mp4">
+            </video>
+
+            <div class="rigth-part">
+                <div class="stats">
+                    <br/>
+                    <br/>
+                    <div class="span-title">
+                        <h2>STATS</h2>
+                    </div>
+                    <br/>
+                    <a>Speed: </a>
+                    <a id="Speed"></a>
+                    <br/>
+                    <a>Pitch: </a>
+                    <a id="Pitch"></a>
+                    <br/>
+                    <a>Raw: </a>
+                    <a id="Raw"></a>
+                    <br/>
+                    <a>Roll: </a>
+                    <a id="Roll"></a>
+                    <br/>
+                    <a>Throttle: </a>
+                    <a id="Throttle"></a>
+                    <br/>
+                    <a>Latitude: </a>
+                    <a id="Latitude"></a>
+                    <br/>
+                    <a>Longitude: </a>
+                    <a id="Longitude"></a>
+                    <br/>
+                    <a>Altitude: </a>
+                    <a id="Altitude"></a>
+                    <br/>
+                </div>
+                <br/>
+                <br/>
+                <div class="maps">
+
+                    <div id='map' style='width: inherit; height: inherit;'></div>
+
+                    <script src="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v4.4.2/mapbox-gl-geocoder.min.js"></script>
+                    <link
+                    rel="stylesheet"
+                    href="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v4.4.2/mapbox-gl-geocoder.css"
+                    type="text/css"
+                    />
+                    <!-- Promise polyfill script required to use Mapbox GL Geocoder in IE 11 -->
+                    <script src="https://cdn.jsdelivr.net/npm/es6-promise@4/dist/es6-promise.min.js"></script>
+                    <script src="https://cdn.jsdelivr.net/npm/es6-promise@4/dist/es6-promise.auto.min.js"></script>
+                    <div id="map"></div>
+
+                    <script>
+
+                        /*// Add geolocate control to the map.
+                        map.addControl(
+                            new mapboxgl.GeolocateControl({
+                            positionOptions: {
+                            enableHighAccuracy: true
+                            },
+                            trackUserLocation: true
+                            })
+                        );*/
+                    </script>
+                </div>
+            </div>
         </div>
     </body>
+    <script src="droneJavaScript.js" charset="utf-8"></script>
+    <script src="serverConnection.js" charset="utf-8"></script>
 </html>

@@ -1,17 +1,34 @@
+//! Video processing for the web side
+//!
+//! # Background
+//!
+//! A H.264 video stream is composed of NAL units (NALU). Each NAL unit starts with
+//! `[0x00, 0x00, 0x00, 0x01]`[^1]. Our only objective is to split these unit using
+//! this delimiter to get the individual NAL units, which the web server can then
+//! send to its clients.
+//!
+//! [^1]: [https://yumichan.net/video-processing/video-compression/introduction-to-h264-nal-unit/](https://yumichan.net/video-processing/video-compression/introduction-to-h264-nal-unit/)
+
 use tokio::prelude::*;
 use tokio_util::codec::Decoder;
 use bytes::Buf;
 use std::iter::FromIterator;
 use serde::Serialize;
 
+/// The byte combination that delimits H.264 NAL units.
 const NAL_SEPARATOR: &[u8] = &[0,0,0,1];
 
 lazy_static! {
+    /// A regular expression which can find the byte combination that
+    /// delimits H.264 NAL units on a byte slice.
     static ref NAL_SEPARATOR_REGEX: regex::bytes::Regex = {
         regex::bytes::Regex::new(r"(?-u)\x00\x00\x00\x01").unwrap()
     };
 }
 
+///
+/// The different payloads that comphrend the basic protocol used by the front-end
+/// to configure the stream.
 #[derive(Serialize)]
 #[serde(tag = "action", content = "payload")]
 pub enum VideoControlPayload {
@@ -21,11 +38,17 @@ pub enum VideoControlPayload {
     StreamActive(bool)
 }
 
+///
+/// A decoder which takes a H.264 bitstream and outputs a series of framed
+/// bitstreams corresponding to the individual NAL units extracted from it.
 pub struct NALSeparator {
     offset: usize,
     _read: usize,
 }
 
+///
+/// Creates a decoder which which takes a H.264 bitstream and outputs a series of
+/// framed bitstreams corresponding to the individual NAL units extracted from it.
 pub fn separate_nal() -> NALSeparator
 {
     NALSeparator {
@@ -34,91 +57,50 @@ pub fn separate_nal() -> NALSeparator
     }
 }
 
-/*macro_rules! cur_buff {
-    ($me: ident) => { if *$me.using_second_buffer { &mut $me.buffer2 } else { &mut $me.buffer1 } }
-}
-
-impl<T: AsyncBufRead> Stream for NALSeparator<T> {
-    type Item = Result<Vec<u8>, io::Error>;
-
-    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        let mut me = self.project();
-        me.cache.clear();
-
-        *me._read = match read_until_internal(me.reader, cx, 0x01, &mut me.cache, &mut me._read) {
-            Poll::Ready(_) if *me._read == 0 && me.cache.len() == 0 => return Poll::Ready(None),
-            Poll::Ready(n) => n,
-            Poll::Pending => return Poll::Pending
-        }?;
-        let cache_len = *me._read;
-
-        let mut current_buffer = cur_buff!(me);
-
-        if *me.offset + cache_len > *me.capacity + *me.buffer_flush {
-            let minimal_length = *me.capacity - *me.body_offset + cache_len;
-
-            if *me.capacity < minimal_length {
-                *me.capacity = minimal_length;
-                me.buffer1.resize(*me.capacity, 0);
-                me.buffer2.resize(*me.capacity, 0);
-            }
-
-            *me.using_second_buffer = !*me.using_second_buffer;
-            let previous_buffer;
-            if *me.using_second_buffer {
-                current_buffer = &mut me.buffer1;
-                previous_buffer = &mut me.buffer2;
-            } else {
-                current_buffer = &mut me.buffer2;
-                previous_buffer = &mut me.buffer1;
-            }
-            current_buffer[..*me.body_offset].copy_from_slice(&previous_buffer[..*me.body_offset]);
-            *me.offset -= *me.body_offset;
-            *me.body_offset = 0;
-        }
-
-        current_buffer[*me.offset..(*me.offset + &me.cache.len())].copy_from_slice(&me.cache);
-
-        let ret: Poll<Option<Self::Item>>;
-        let start = cmp::max(*me.body_offset, me.offset.saturating_sub(4));
-        let stop = *me.offset + cache_len;
-
-        if let Some(idx) = NAL_SEPARATOR_REGEX.find(&current_buffer[start..stop]) {
-            let idx2 = idx.start() + start;
-            let frame: Vec<u8> = Vec::from_iter(
-                NAL_SEPARATOR.iter().chain(&mut current_buffer[*me.body_offset..idx2].iter()).copied());
-            ret = Poll::Ready(Some(Ok(frame)));
-            *me.body_offset = idx2 + 4;
-        } else {
-            ret = Poll::Pending;
-        }
-
-        *me.offset += cache_len;
-
-        return ret;
-    }
-}*/
-
 impl Decoder for NALSeparator {
     type Item = Vec<u8>;
     type Error = io::Error;
 
     fn decode(&mut self, data: &mut bytes::BytesMut) -> Result<Option<Self::Item>, Self::Error> {
+        // We are given `data` as the data we have to chunk into NAL units
+        // If we return `Ok(None)`, we don't have any complete unit yet, so on the next
+        // call we will get the same data on top of any additional received data.
+        // If we find that we have complete data, we are responsible of removing the read
+        // bytes from the `data` buffer, and return the final chunked NAL frame.
+
         let index;
+
+        // Attempt to find the NAL unit separator in the data
         if let Some(idx) = NAL_SEPARATOR_REGEX.find_at(&data, self.offset) {
+            // We have it! Store its start index.
             index = idx.start();
         } else {
+            // We don't have it, so we wait until next time, continuing the search
+            // at where we left off (minus some margin).
             self.offset = data.len().saturating_sub(4);
             return Ok(None);
         }
 
+        // We split the data buffer by the start index of the found separator, removing
+        // the data we will output and leaving the rest of the data (which will be part
+        // of the next NAL unit)
         let data_split = data.split_to(index);
-        data.advance(4);
+        data.advance(4); // Then we discard the separator itself
+
+        // It makes no sense to return an empty NAL unit, so if we find that our output
+        // will be empty, we simply discard it and act as if the unit was not there.
         if data_split.is_empty() {
             return Ok(None);
         }
+
+        // For compatibility purposes, we append the NAL separator itself to the beginning
+        // of the outputted NAL unit.
         let final_data = Vec::from_iter(NAL_SEPARATOR.iter().copied().chain(data_split));
+
+        // We reset our starting location for searches
         self.offset = 0;
+
+        // And finally return the extracted NAL unit
         Ok(Some(final_data))
     }
 }
@@ -127,13 +109,14 @@ impl Decoder for NALSeparator {
 mod tests {
     use super::*;
     use std::io::Cursor;
-    use tokio::fs::File;
+    //use tokio::fs::File;
     use tokio_util::codec::FramedRead;
-    use futures::{StreamExt, TryFutureExt};
+    use futures::StreamExt;
+    //use futures::TryFutureExt;
 
     #[tokio::test]
     async fn nal_separator() {
-        //let some_stuff = File::open("/Users/Nnubes256/Desktop/Capturas/test.mp4").await.unwrap();
+        //let some_stuff = File::open("test.mp4").await.unwrap();
         let some_stuff = Cursor::new(
             vec![0, 0, 0, 1, 3, 4, 5, 6, 7, 8, 9, 10,
                  0, 0, 0, 1, 7, 8, 9, 0, 0, 0, 1, 5, 6, 7, 8, 9, 10, 0, 0, 0, 1]
