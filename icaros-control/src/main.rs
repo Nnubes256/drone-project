@@ -18,9 +18,9 @@ use crate::comms::udp::{UDPCommunicationOptions, UDPCommunicationService};
 use std::thread;
 use std::time::Duration;
 
-#[cfg(target_os = "linux")] use crate::comms::rf24::{RF24CommunicationOptions, RF24CommunicationService};
-#[cfg(target_os = "linux")] use rf24::{DataRate, SPISpeed, PowerAmplifierLevel, RF24Error};
-#[cfg(target_os = "linux")]
+#[cfg(target = "armv7-unknown-linux-gnueabihf")] use crate::comms::rf24::{RF24CommunicationOptions, RF24CommunicationService};
+#[cfg(target = "armv7-unknown-linux-gnueabihf")] use rf24::{DataRate, SPISpeed, PowerAmplifierLevel, RF24Error};
+#[cfg(target = "armv7-unknown-linux-gnueabihf")]
 fn get_scheduler() -> Result<AirPacketScheduler<RF24CommunicationService, GroundSystemState, G2AMessage, A2GMessage>, RF24Error> {
     // Configure the driver
     let opts = RF24CommunicationOptions {
