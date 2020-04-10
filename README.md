@@ -6,6 +6,7 @@ Drone project code
 - `.github`: Continuous Integration workflows.
 - `icaros`: The ICAROS (*In-flight Communications And Reporting Operations System*) drone-side code.
 - `icaros-control`: The ICAROS Control (*In-flight Communications And Reporting Operations System*) ground-control-side code.
+- `icaros-base`: ICAROS common code.
 - `icaros-docs`: Generated HTML documentation for all Rust code (can be generated from source by executing `cargo doc`).
 - `flightControllingAlgorithm`: Arduino flight controller code.
 - `ComputerVision`: Computer vision in-flight application.
