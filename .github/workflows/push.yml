@@ -30,7 +30,7 @@ jobs:
         toolchain: nightly
         override: true
     - name: Install external dependencies
-      run: sudo apt-get install libudev-dev hwloc libhwloc-dev
+      run: sudo apt-get update && sudo apt-get install libudev-dev hwloc libhwloc-dev
     - name: Build icaros
       run: cargo build --verbose
       working-directory: icaros
